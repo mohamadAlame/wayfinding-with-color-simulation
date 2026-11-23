@@ -1,8 +1,8 @@
 import {Street} from './scene.js';
-import {TEST, PRACTICE, graph, facing} from './world.js';
+import {ROUTES, PRACTICE, graph, facing} from './world.js';
 const $ = id => document.getElementById(id), q = new URLSearchParams(location.search), preview = q.get('preview');
 const KEY = 'finding-a-building', store = {get: () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } }, set: v => { if (!preview) try { localStorage.setItem(KEY, JSON.stringify(v)); } catch {} }};
-let S, cfg, walk = null;
+let S, walk = null, at = 0; // at = which of their walks
 const show = id => { document.querySelectorAll('main>section').forEach(s => s.hidden = s.id !== 's-' + id); $('page').hidden = false; $('walk').hidden = true; scrollTo(0, 0); };
 const message = (t, p) => { $('msgT').textContent = t; $('msgP').textContent = p; show('msg'); };
 document.querySelectorAll('.opts').forEach(el => el.dataset.o.split('|').forEach(o => { const l = document.createElement('label'), i = document.createElement('input'); i.type = 'radio'; i.name = el.dataset.q; i.value = o; i.required = true; l.append(i, o); el.append(l); }));
@@ -20,18 +20,24 @@ async function begin() {
   if (old.stage === 'test') return message('This session has ended', 'The page was reloaded after the directions were shown, so it can’t be continued. Thank you for trying. Your code is ' + old.code + '.');
   try { S = await api('start', {preview: preview || '', code: old.code || '', token: old.token || '', device: matchMedia('(pointer:coarse)').matches ? 'phone/tablet' : 'computer', screen: innerWidth + 'x' + innerHeight}); }
   catch (e) { return e.status === 423 ? message('The study is closed', 'Thank you for your interest.') : message('Something went wrong', 'Please check your connection and reload the page.'); }
-  store.set({code: S.code, token: S.token, stage: 'start'});
+  store.set({code: S.code, token: S.token, stage: 'start'}); S.walks = [];
   document.querySelectorAll('[data-code]').forEach(e => e.textContent = S.code); show('welcome');
 }
 $('c1').onchange = () => $('agree').disabled = !$('c1').checked;
 $('agree').onclick = () => { saveQuiet({consent: true}); show('about'); };
 $('aboutForm').onsubmit = e => { e.preventDefault(); saveQuiet({about: answers(e.target)}); show('practice'); };
 $('goPractice').onclick = $('again').onclick = () => startWalk('practice');
-$('goDirections').onclick = () => { $('say').textContent = S.directions; store.set({code: S.code, token: S.token, stage: 'test'}); saveQuiet({directionsShown: true}); S.readFrom = performance.now(); show('directions'); };
+function ready() { $('readyT').textContent = at ? 'Second walk' : 'Good, you’ve got it'; $('readyP').textContent = at ? 'A different neighbourhood, with new directions. Again you read them once.' : 'Now the first real walk. You’ll read the directions once, then they disappear. Take your time, and don’t write them down.'; $('again').hidden = at > 0; show('ready'); }
+$('goDirections').onclick = () => { $('say').textContent = S.plan[at].directions; store.set({code: S.code, token: S.token, stage: 'test'}); saveQuiet({directionsShown: true}); S.readFrom = performance.now(); show('directions'); };
 $('goTest').onclick = () => { S.readMs = Math.round(performance.now() - S.readFrom); $('say').textContent = ''; startWalk('test'); };
-$('afterForm').onsubmit = async e => {
-  e.preventDefault(); const b = e.target.querySelector('button'); b.disabled = true; $('saveErr').textContent = '';
-  try { await save({after: answers(e.target), test: S.test, complete: true}); store.set({code: S.code, token: S.token, stage: 'done'}); show('thanks'); }
+$('afterForm').onsubmit = e => {
+  e.preventDefault(); S.walks[at].after = answers(e.target); e.target.reset(); saveQuiet({walk: at, data: S.walks[at]});
+  if (++at < S.plan.length) ready(); else show('end');
+};
+$('endForm').onsubmit = e => { e.preventDefault(); S.end = answers(e.target); saveQuiet({end: S.end}); show('end2'); };
+$('end2Form').onsubmit = async e => {
+  e.preventDefault(); const b = e.submitter || e.target.querySelector('button'); b.disabled = true; $('saveErr').textContent = '';
+  try { await save({end: {...S.end, ...answers(e.target)}, walks: S.walks, complete: true}); store.set({code: S.code, token: S.token, stage: 'done'}); show('thanks'); }
   catch { $('saveErr').textContent = 'Not saved. Check your connection and press Finish again.'; b.disabled = false; }
 };
 $('erase').onclick = async () => { if (!confirm('Delete all your answers? This can’t be undone.')) return; try { await api('erase', {code: S.code, token: S.token}); message('Deleted', 'Your answers were deleted. Thank you anyway.'); } catch { alert('Could not delete. Please try again.'); } };
@@ -41,10 +47,10 @@ function startWalk(kind) {
   $('page').hidden = true; $('walk').hidden = false; $('loading').hidden = false; $('loading').textContent = 'Loading the street…'; $('ask').hidden = true; $('tip').hidden = true;
   setTimeout(() => {
     try {
-      const w = kind === 'test' ? TEST : PRACTICE, nodes = graph(w), n = nodes[w.start.node];
+      const w = kind === 'test' ? ROUTES[S.plan[at].route] : PRACTICE, nodes = graph(w), n = nodes[w.start.node];
       // a fresh canvas each time: a disposed WebGL canvas can't be reused reliably
       const cv = document.createElement('canvas'); cv.id = 'cv'; $('cv').replaceWith(cv); bindCanvas(cv);
-      const street = new Street(cv, w, S.mode, S.targetColour);
+      const street = new Street(cv, w, kind === 'test' && S.plan[at].coloured);
       walk = {kind, w, nodes, node: n, x: n.x, z: n.z, yaw: w.start.yaw, pitch: .06, street, path: [], rec: [], events: [], moving: false, held: false, turn: 0, hidden: 0, t0: performance.now(), last: 0, dirty: true};
       street.resize(); street.setArrows(n, nodes); street.render(walk.x, walk.z, walk.yaw, walk.pitch); mark();
       requestAnimationFrame(() => { $('loading').hidden = true; walk.t0 = performance.now(); sample(); if (kind === 'practice') tip('Drag to look around. Hold “Walk” to go forward.'); requestAnimationFrame(loop); });
@@ -73,7 +79,7 @@ function loop(t) {
   if (walk.turn && $('ask').hidden) { walk.yaw += walk.turn * dt * .0016; walk.dirty = true; }
   if (walk.moving) {
     walk.k = Math.min(1, walk.k + dt / 620); walk.x = walk.from.x + (walk.to.x - walk.from.x) * walk.k; walk.z = walk.from.z + (walk.to.z - walk.from.z) * walk.k; walk.dirty = true;
-    if (walk.k === 1) { walk.moving = false; walk.node = walk.to; mark(); const id = walk.held && ahead(); if (id) go(id); else { walk.street.setArrows(walk.node, walk.nodes); walk.street.arrows.visible = true; } if (walk.kind === 'practice' && walk.node.id === 'p4') tip('Now put the white dot on the building ahead and press “This is the building”.'); }
+    if (walk.k === 1) { walk.moving = false; walk.node = walk.to; mark(); const id = walk.held && ahead(); if (id) go(id); else { walk.street.setArrows(walk.node, walk.nodes); walk.street.arrows.visible = true; } if (walk.kind === 'practice' && walk.node.id === 'p4') tip('Now turn right: hold ▶ or drag the picture. Then walk on.'); if (walk.kind === 'practice' && walk.node.id === 'q4') tip('Put the white dot on the building ahead and press “This is the building”.'); }
   }
   if (walk.dirty) { walk.street.render(walk.x, walk.z, walk.yaw, walk.pitch); walk.dirty = false; }
   sample(); requestAnimationFrame(loop);
@@ -92,7 +98,7 @@ hold($('left'), () => walk && (walk.turn = -1), () => walk && (walk.turn = 0)); 
 addEventListener('keydown', e => { if (!walk || !$('ask').hidden) return; if (e.key === 'ArrowUp') { walk.held = true; if (!e.repeat) forward(); } else if (e.key === 'ArrowLeft') walk.turn = -1; else if (e.key === 'ArrowRight') walk.turn = 1; else return; e.preventDefault(); });
 addEventListener('keyup', e => { if (!walk) return; if (e.key === 'ArrowUp') walk.held = false; if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') walk.turn = 0; });
 addEventListener('resize', () => { if (walk) { walk.street.resize(); walk.dirty = true; } });
-document.addEventListener('visibilitychange', () => { if (!walk) return; if (document.hidden) { event('left the page'); if (walk.kind === 'test') saveQuiet({test: result(walk, '')}); walk.away = performance.now(); walk.held = false; walk.turn = 0; } else if (walk.away) { walk.hidden += performance.now() - walk.away; walk.away = 0; walk.dirty = true; event('came back'); } });
+document.addEventListener('visibilitychange', () => { if (!walk) return; if (document.hidden) { event('left the page'); if (walk.kind === 'test') saveQuiet({walk: at, data: result(walk, '')}); walk.away = performance.now(); walk.held = false; walk.turn = 0; } else if (walk.away) { walk.hidden += performance.now() - walk.away; walk.away = 0; walk.dirty = true; event('came back'); } });
 addEventListener('blur', () => { if (walk) { walk.held = false; walk.turn = 0; } });
 $('here').onclick = () => {
   if (!walk || walk.moving) return;
@@ -103,10 +109,10 @@ $('here').onclick = () => {
 };
 $('no').onclick = () => { $('ask').hidden = true; event('kept walking'); };
 $('yes').onclick = () => {
-  const w = walk, id = w.choice.id; $('ask').hidden = true;
-  if (w.kind === 'practice') { if (id !== w.w.target) return tip('Not that one. Choose the building straight ahead, at the end of the street.', 4000); end(); saveQuiet({practiceDone: true}); return show('ready'); }
-  mark(); event('chose', id); S.test = result(w, id);
-  end(); saveQuiet({test: S.test}); show('after');
+  if (!walk?.choice) return; const w = walk, id = w.choice.id; $('ask').hidden = true;
+  if (w.kind === 'practice') { if (id !== w.w.target) return tip('Not that one. Turn right at the corner, go to the end, and choose the building straight ahead.', 4500); end(); saveQuiet({practiceDone: true}); return ready(); }
+  mark(); event('chose', id); S.walks[at] = result(w, id);
+  end(); saveQuiet({walk: at, data: S.walks[at]}); $('afterT').textContent = at + 1 < S.plan.length ? 'First walk done' : 'Second walk done'; show('after');
 };
 function end() { walk.street.dispose(); walk = null; }
 begin();
