@@ -8,7 +8,8 @@ const message = (t, p) => { $('msgT').textContent = t; $('msgP').textContent = p
 document.querySelectorAll('.opts').forEach(el => el.dataset.o.split('|').forEach(o => { const l = document.createElement('label'), i = document.createElement('input'); i.type = 'radio'; i.name = el.dataset.q; i.value = o; i.required = true; l.append(i, o); el.append(l); }));
 const answers = f => Object.fromEntries(new FormData(f));
 async function api(path, body) {
-  const r = await fetch('api/' + path, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body), keepalive: true});
+  const text = JSON.stringify(body); // keepalive lets a save survive closing the page, but browsers cap it at 64 KB
+  const r = await fetch('api/' + path, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: text, keepalive: text.length < 60000});
   const j = await r.json().catch(() => ({})); if (!r.ok) throw Object.assign(new Error(j.error || 'No connection.'), {status: r.status}); return j;
 }
 const save = part => api('save', {code: S.code, token: S.token, ...part});
@@ -44,13 +45,24 @@ function startWalk(kind) {
       // a fresh canvas each time: a disposed WebGL canvas can't be reused reliably
       const cv = document.createElement('canvas'); cv.id = 'cv'; $('cv').replaceWith(cv); bindCanvas(cv);
       const street = new Street(cv, w, S.mode, S.targetColour);
-      walk = {kind, w, nodes, node: n, x: n.x, z: n.z, yaw: w.start.yaw, pitch: .06, street, path: [], moving: false, held: false, turn: 0, hidden: 0, t0: performance.now(), last: 0, dirty: true};
+      walk = {kind, w, nodes, node: n, x: n.x, z: n.z, yaw: w.start.yaw, pitch: .06, street, path: [], rec: [], events: [], moving: false, held: false, turn: 0, hidden: 0, t0: performance.now(), last: 0, dirty: true};
       street.resize(); street.setArrows(n, nodes); street.render(walk.x, walk.z, walk.yaw, walk.pitch); mark();
-      requestAnimationFrame(() => { $('loading').hidden = true; walk.t0 = performance.now(); if (kind === 'practice') tip('Drag to look around. Hold “Walk” to go forward.'); requestAnimationFrame(loop); });
+      requestAnimationFrame(() => { $('loading').hidden = true; walk.t0 = performance.now(); sample(); if (kind === 'practice') tip('Drag to look around. Hold “Walk” to go forward.'); requestAnimationFrame(loop); });
     } catch (e) { console.error(e); $('loading').textContent = 'This device could not show the 3D street. Please try another browser or a computer.'; saveQuiet({problem: String(e).slice(0, 200)}); }
   }, 60);
 }
 const mark = () => walk.path.push([Math.round(performance.now() - walk.t0), walk.node.id, Math.round(((walk.yaw * 180 / Math.PI) % 360 + 360) % 360)]);
+// The walk as positions and view directions, about 8 a second and only when something changes: enough to replay it.
+const now = () => Math.round(performance.now() - walk.t0), tenth = v => Math.round(v * 10);
+function sample() {
+  if (walk.kind !== 'test' || walk.rec.length >= 5000) return;
+  const v = [now(), tenth(walk.x), tenth(walk.z), tenth(walk.yaw * 180 / Math.PI), tenth(walk.pitch * 180 / Math.PI)], l = walk.rec[walk.rec.length - 1];
+  if (l && (v[0] - l[0] < 125 || !v.slice(1).some((x, i) => x !== l[i + 1]))) return;
+  if (l && v[0] - l[0] > 300) walk.rec.push([v[0] - 125, ...l.slice(1)]); // they stood still until here
+  walk.rec.push(v);
+}
+const event = (e, id = '') => { if (walk.kind === 'test' && walk.events.length < 200) walk.events.push([now(), e, id]); };
+const result = (w, chosen) => ({ms: Math.round(performance.now() - w.t0), hiddenMs: Math.round(w.hidden), readMs: S.readMs, chosen, path: w.path.slice(0, 1500), rec: w.rec, events: w.events});
 let tipT; function tip(t, ms) { clearTimeout(tipT); $('tip').textContent = t; $('tip').hidden = !t; if (ms) tipT = setTimeout(() => $('tip').hidden = true, ms); }
 const diff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 function ahead() { let best = null, bd = .9; for (const id of walk.node.next) { const n = walk.nodes[id], d = Math.abs(diff(Math.atan2(n.x - walk.node.x, -(n.z - walk.node.z)), walk.yaw)); if (d < bd) { bd = d; best = id; } } return best; }
@@ -64,7 +76,7 @@ function loop(t) {
     if (walk.k === 1) { walk.moving = false; walk.node = walk.to; mark(); const id = walk.held && ahead(); if (id) go(id); else { walk.street.setArrows(walk.node, walk.nodes); walk.street.arrows.visible = true; } if (walk.kind === 'practice' && walk.node.id === 'p4') tip('Now put the white dot on the building ahead and press “This is the building”.'); }
   }
   if (walk.dirty) { walk.street.render(walk.x, walk.z, walk.yaw, walk.pitch); walk.dirty = false; }
-  requestAnimationFrame(loop);
+  sample(); requestAnimationFrame(loop);
 }
 function bindCanvas(cv) {
   let p = null;
@@ -80,19 +92,20 @@ hold($('left'), () => walk && (walk.turn = -1), () => walk && (walk.turn = 0)); 
 addEventListener('keydown', e => { if (!walk || !$('ask').hidden) return; if (e.key === 'ArrowUp') { walk.held = true; if (!e.repeat) forward(); } else if (e.key === 'ArrowLeft') walk.turn = -1; else if (e.key === 'ArrowRight') walk.turn = 1; else return; e.preventDefault(); });
 addEventListener('keyup', e => { if (!walk) return; if (e.key === 'ArrowUp') walk.held = false; if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') walk.turn = 0; });
 addEventListener('resize', () => { if (walk) { walk.street.resize(); walk.dirty = true; } });
-document.addEventListener('visibilitychange', () => { if (!walk) return; if (document.hidden) { walk.away = performance.now(); walk.held = false; walk.turn = 0; } else if (walk.away) { walk.hidden += performance.now() - walk.away; walk.away = 0; walk.dirty = true; } });
+document.addEventListener('visibilitychange', () => { if (!walk) return; if (document.hidden) { event('left the page'); if (walk.kind === 'test') saveQuiet({test: result(walk, '')}); walk.away = performance.now(); walk.held = false; walk.turn = 0; } else if (walk.away) { walk.hidden += performance.now() - walk.away; walk.away = 0; walk.dirty = true; event('came back'); } });
 addEventListener('blur', () => { if (walk) { walk.held = false; walk.turn = 0; } });
 $('here').onclick = () => {
   if (!walk || walk.moving) return;
   walk.choice = facing(walk.w, walk.x, walk.z, walk.yaw);
+  event(walk.choice ? 'asked' : 'too far', walk.choice?.id);
   if (!walk.choice) return tip('Walk up to the building and put the white dot on it, then press again.', 3500);
   walk.held = false; walk.turn = 0; $('askP').hidden = walk.kind === 'practice'; $('ask').hidden = false; $('yes').focus();
 };
-$('no').onclick = () => $('ask').hidden = true;
+$('no').onclick = () => { $('ask').hidden = true; event('kept walking'); };
 $('yes').onclick = () => {
   const w = walk, id = w.choice.id; $('ask').hidden = true;
   if (w.kind === 'practice') { if (id !== w.w.target) return tip('Not that one. Choose the building straight ahead, at the end of the street.', 4000); end(); saveQuiet({practiceDone: true}); return show('ready'); }
-  mark(); S.test = {ms: Math.round(performance.now() - w.t0), hiddenMs: Math.round(w.hidden), readMs: S.readMs, chosen: id, correct: id === w.w.target, path: w.path.slice(0, 1500)};
+  mark(); event('chose', id); S.test = result(w, id);
   end(); saveQuiet({test: S.test}); show('after');
 };
 function end() { walk.street.dispose(); walk = null; }

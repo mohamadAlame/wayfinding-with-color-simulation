@@ -69,7 +69,10 @@ def txt(v, n=120):
     return str(v if v is not None else "")[:n]
 
 def num(v, hi=10**8):
-    return max(0, min(hi, int(v))) if isinstance(v, (int, float)) and v == v else 0
+    return max(0, min(hi, int(v))) if isinstance(v, (int, float)) and v == v and abs(v) != float("inf") else 0
+
+def snum(v, hi):
+    return max(-hi, min(hi, int(v))) if isinstance(v, (int, float)) and v == v and abs(v) != float("inf") else 0
 
 def clean(b):
     """Only known fields, with limits: this endpoint is open to the internet."""
@@ -86,7 +89,9 @@ def clean(b):
         path = t.get("path") if isinstance(t.get("path"), list) else []
         out["test"] = {"ms": num(t.get("ms")), "hiddenMs": num(t.get("hiddenMs")), "readMs": num(t.get("readMs")), "chosen": txt(t.get("chosen"), 8),
                        "correct": t.get("chosen") == "D-R2",
-                       "path": [[num(p[0]), txt(p[1], 5), num(p[2], 360)] for p in path[:1500] if isinstance(p, list) and len(p) == 3]}
+                       "path": [[num(p[0]), txt(p[1], 5), num(p[2], 360)] for p in path[:1500] if isinstance(p, list) and len(p) == 3],
+                       "rec": [[num(p[0])] + [snum(v, 10**6) for v in p[1:]] for p in (t.get("rec") if isinstance(t.get("rec"), list) else [])[:6000] if isinstance(p, list) and len(p) == 5],
+                       "events": [[num(p[0]), txt(p[1], 20), txt(p[2], 8)] for p in (t.get("events") if isinstance(t.get("events"), list) else [])[:200] if isinstance(p, list) and len(p) == 3]}
     if b.get("problem"):
         out["problem"] = txt(b["problem"], 200)
     return out
