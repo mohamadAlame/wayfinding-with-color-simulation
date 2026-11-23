@@ -15,9 +15,9 @@ HOST, PORT = os.environ.get("STUDY_HOST", "127.0.0.1"), int(os.environ.get("STUD
 ROUTES = {"R1": "D-R2", "R2": "E-R2", "R3": "D-R2", "R4": "E-R2"}  # route: its right building
 _T = {"R1": ("tene mafra2 3al yamin", "awal mafra2 3al shmel", "yamin", "a7mar"), "R2": ("awal mafra2 3al shmel", "tene mafra2 3al yamin", "shmel", "asfar"),
       "R3": ("tene mafra2 3al shmel", "awal mafra2 3al yamin", "shmel", "mauve"), "R4": ("awal mafra2 3al yamin", "tene mafra2 3al shmel", "yamin", "akhdar")}
-DEFAULT = {"v": 2, "open": True, "directions": {r: {  # Lebanese Arabizi, approved by the student
+DEFAULT = {"v": 2, "open": True, "directions": {r: {  # Lebanese Arabizi
     "plain": f"Btemsho deghre, btekhdo {a}, w ba3da {b}. Btkoun tene bineye 3al {s}.",
-    "coloured": f"Btemsho deghre, btekhdo {a}, w ba3da {b}. Btkoun l bineye yalli 3layha banner {c}, 3al {s}."} for r, (a, b, s, c) in _T.items()}}
+    "coloured": f"Btemsho deghre, btekhdo {a}, w ba3da {b}. Btkoun l bineye yalli 3layha poster kbir {c}, 3al {s}."} for r, (a, b, s, c) in _T.items()}}
 # Who walks what: pairs of routes (1+2, 3+4). Neighbouring cells swap the colour between the same two routes,
 # and the second half repeats the first with the routes in the other order. 8 people fill it once.
 def _cell(x, y, first):
