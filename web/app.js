@@ -53,7 +53,7 @@ function startWalk(kind) {
       const street = new Street(cv, w, kind === 'test' && S.plan[at].coloured);
       walk = {kind, w, nodes, node: n, x: n.x, z: n.z, yaw: w.start.yaw, pitch: .06, street, path: [], rec: [], events: [], moving: false, held: false, turn: 0, hidden: 0, t0: performance.now(), last: 0, dirty: true};
       street.resize(); street.setArrows(n, nodes); street.render(walk.x, walk.z, walk.yaw, walk.pitch); mark();
-      requestAnimationFrame(() => { $('loading').hidden = true; walk.t0 = performance.now(); sample(); if (kind === 'practice') tip('Drag to look around. Hold “Walk” to go forward.'); requestAnimationFrame(loop); });
+      requestAnimationFrame(() => { $('loading').hidden = true; walk.t0 = performance.now(); sample(); if (kind === 'practice') tip(matchMedia('(pointer:coarse)').matches ? 'Drag to look around. Hold “Walk” to go forward.' : 'Drag, or A and D, to look around. Hold W or “Walk” to go forward.'); requestAnimationFrame(loop); });
     } catch (e) { console.error(e); $('loading').textContent = 'This device could not show the 3D street. Please try another browser or a computer.'; saveQuiet({problem: String(e).slice(0, 200)}); }
   }, 60);
 }
@@ -73,13 +73,14 @@ let tipT; function tip(t, ms) { clearTimeout(tipT); $('tip').textContent = t; $(
 const diff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 function ahead() { let best = null, bd = .9; for (const id of walk.node.next) { const n = walk.nodes[id], d = Math.abs(diff(Math.atan2(n.x - walk.node.x, -(n.z - walk.node.z)), walk.yaw)); if (d < bd) { bd = d; best = id; } } return best; }
 function go(id) { if (!walk || walk.moving || !id || !$('ask').hidden) return; walk.moving = true; walk.from = walk.node; walk.to = walk.nodes[id]; walk.k = 0; walk.street.arrows.visible = false; if (walk.kind === 'practice') tip(''); }
+function back() { const y = walk.yaw; walk.yaw = y + Math.PI; const id = ahead(); walk.yaw = y; if (id) go(id); else tip('You can’t step back here.', 1800); }
 function forward() { const id = ahead(); if (id) go(id); else tip('You can’t walk that way. Turn towards a street.', 2200); }
 function loop(t) {
   if (!walk) return; const dt = Math.min(250, t - (walk.last || t)); walk.last = t;
   if (walk.turn && $('ask').hidden) { walk.yaw += walk.turn * dt * .0016; walk.dirty = true; }
   if (walk.moving) {
     walk.k = Math.min(1, walk.k + dt / 620); walk.x = walk.from.x + (walk.to.x - walk.from.x) * walk.k; walk.z = walk.from.z + (walk.to.z - walk.from.z) * walk.k; walk.dirty = true;
-    if (walk.k === 1) { walk.moving = false; walk.node = walk.to; mark(); const id = walk.held && ahead(); if (id) go(id); else { walk.street.setArrows(walk.node, walk.nodes); walk.street.arrows.visible = true; } if (walk.kind === 'practice' && walk.node.id === 'p4') tip('Now turn right: hold ▶ or drag the picture. Then walk on.'); if (walk.kind === 'practice' && walk.node.id === 'q4') tip('Put the white dot on the building ahead and press “This is the building”.'); }
+    if (walk.k === 1) { walk.moving = false; walk.node = walk.to; mark(); let id = null; if (walk.held) { const y = walk.yaw; if (walk.held < 0) walk.yaw += Math.PI; id = ahead(); walk.yaw = y; } if (id) go(id); else { walk.street.setArrows(walk.node, walk.nodes); walk.street.arrows.visible = true; } if (walk.kind === 'practice' && walk.node.id === 'p4') tip(matchMedia('(pointer:coarse)').matches ? 'Now turn right: hold ▶ or drag the picture. Then walk on.' : 'Now turn right: hold D or ▶, or drag the picture. Then walk on.'); if (walk.kind === 'practice' && walk.node.id === 'q4') tip('Put the white dot on the building ahead and press “This is the building”.'); }
   }
   if (walk.dirty) { walk.street.render(walk.x, walk.z, walk.yaw, walk.pitch); walk.dirty = false; }
   sample(); requestAnimationFrame(loop);
@@ -93,19 +94,28 @@ function bindCanvas(cv) {
   cv.addEventListener('webglcontextlost', e => { e.preventDefault(); $('loading').hidden = false; $('loading').textContent = 'The 3D view stopped. Please try another browser.'; });
 }
 function hold(el, on, off) { el.onpointerdown = e => { e.preventDefault(); el.setPointerCapture(e.pointerId); on(); }; el.onpointerup = el.onpointercancel = el.onlostpointercapture = off; el.oncontextmenu = e => e.preventDefault(); el.onclick = e => { if (e.detail === 0) { on(); setTimeout(off, 200); } }; }
-hold($('fwd'), () => { if (walk) { walk.held = true; forward(); } }, () => { if (walk) walk.held = false; });
+hold($('fwd'), () => { if (walk) { walk.held = 1; forward(); } }, () => { if (walk) walk.held = 0; });
 hold($('left'), () => walk && (walk.turn = -1), () => walk && (walk.turn = 0)); hold($('right'), () => walk && (walk.turn = 1), () => walk && (walk.turn = 0));
-addEventListener('keydown', e => { if (!walk || !$('ask').hidden) return; if (e.key === 'ArrowUp') { walk.held = true; if (!e.repeat) forward(); } else if (e.key === 'ArrowLeft') walk.turn = -1; else if (e.key === 'ArrowRight') walk.turn = 1; else return; e.preventDefault(); });
-addEventListener('keyup', e => { if (!walk) return; if (e.key === 'ArrowUp') walk.held = false; if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') walk.turn = 0; });
+// by key position, so it also works with an Arabic keyboard layout
+const KEYS = {KeyW: 'f', ArrowUp: 'f', KeyS: 'b', ArrowDown: 'b', KeyA: 'l', ArrowLeft: 'l', KeyD: 'r', ArrowRight: 'r'}, down = new Set();
+addEventListener('keydown', e => {
+  const k = KEYS[e.code]; if (!k || !walk || !$('ask').hidden || e.ctrlKey || e.metaKey || e.altKey) return;
+  e.preventDefault(); if (e.repeat) return; down.add(k);
+  if (k === 'f') { walk.held = 1; forward(); } else if (k === 'b') { walk.held = -1; back(); } else walk.turn = k === 'l' ? -1 : 1;
+});
+addEventListener('keyup', e => {
+  const k = KEYS[e.code]; if (!k) return; down.delete(k); if (!walk) return;
+  if (k === 'f' || k === 'b') walk.held = down.has('f') ? 1 : down.has('b') ? -1 : 0; else walk.turn = down.has('l') ? -1 : down.has('r') ? 1 : 0;
+});
 addEventListener('resize', () => { if (walk) { walk.street.resize(); walk.dirty = true; } });
-document.addEventListener('visibilitychange', () => { if (!walk) return; if (document.hidden) { event('left the page'); if (walk.kind === 'test') saveQuiet({walk: at, data: result(walk, '')}); walk.away = performance.now(); walk.held = false; walk.turn = 0; } else if (walk.away) { walk.hidden += performance.now() - walk.away; walk.away = 0; walk.dirty = true; event('came back'); } });
-addEventListener('blur', () => { if (walk) { walk.held = false; walk.turn = 0; } });
+document.addEventListener('visibilitychange', () => { if (!walk) return; if (document.hidden) { event('left the page'); if (walk.kind === 'test') saveQuiet({walk: at, data: result(walk, '')}); walk.away = performance.now(); walk.held = 0; walk.turn = 0; } else if (walk.away) { walk.hidden += performance.now() - walk.away; walk.away = 0; walk.dirty = true; event('came back'); } });
+addEventListener('blur', () => { down.clear(); if (walk) { walk.held = 0; walk.turn = 0; } });
 $('here').onclick = () => {
   if (!walk || walk.moving) return;
   walk.choice = facing(walk.w, walk.x, walk.z, walk.yaw);
   event(walk.choice ? 'asked' : 'too far', walk.choice?.id);
   if (!walk.choice) return tip('Walk up to the building and put the white dot on it, then press again.', 3500);
-  walk.held = false; walk.turn = 0; $('askP').hidden = walk.kind === 'practice'; $('ask').hidden = false; $('yes').focus();
+  walk.held = 0; walk.turn = 0; $('askP').hidden = walk.kind === 'practice'; $('ask').hidden = false; $('yes').focus();
 };
 $('no').onclick = () => { $('ask').hidden = true; event('kept walking'); };
 $('yes').onclick = () => {
