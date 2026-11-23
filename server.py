@@ -247,4 +247,5 @@ class H(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     print(f"Study: http://localhost:{PORT}/\nAdmin: http://localhost:{PORT}/admin-{TOKEN}", flush=True)
+    ThreadingHTTPServer.request_queue_size = 64
     ThreadingHTTPServer((HOST, PORT), H).serve_forever()
