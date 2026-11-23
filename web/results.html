@@ -1,0 +1,20 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Results</title><link rel="stylesheet" href="/style.css"></head><body><main class="wrap wide">
+<nav><a href="/">New participant</a><a href="/settings">Settings</a></nav><h1>Results</h1>
+<p class="muted">Counts finished study runs only. Pilots, stopped sessions and technical problems are listed but not counted.</p>
+<div class="scroll"><table id="sum"></table></div><h2>Sessions</h2><div class="scroll"><table id="all"></table></div>
+<div class="actions"><button id="csv">Download CSV</button></div>
+<h2>Withdraw a participant</h2><label class="f">Code<input type="text" id="w" placeholder="P-XXXX"></label><button class="alt" id="wb">Delete their data</button> <span id="msg" role="status"></span></main>
+<script src="/common.js"></script><script>
+const COL={code:s=>s.code,kind:s=>s.kind,status:s=>s.status,mode:s=>MODES[s.mode],mode_name:s=>s.mode,directions:s=>s.delivery,result:s=>s.outcome?.result,seconds:s=>s.test?.ms==null?"":(s.test.ms/1000).toFixed(1),ended:s=>s.test?.ended,over_limit:s=>s.test?.overLimit,practices:s=>s.practices,area:s=>s.about?.area,streetview:s=>s.about?.streetview,colour_vision:s=>s.about?.colour_vision,confidence:s=>s.after?.confidence?.[0],ease:s=>s.after?.ease?.[0],recognised:s=>s.after?.recognised,used:s=>s.after?.used,note:s=>s.outcome?.note,created:s=>s.created};
+let rows=[];
+function table(el,data){el.replaceChildren(...data.map((r,i)=>{const tr=document.createElement("tr");for(const c of r){const d=document.createElement(i?"td":"th");d.textContent=c??"";tr.append(d);}return tr;}));}
+const med=a=>{if(!a.length)return"–";a.sort((x,y)=>x-y);const m=a.length>>1;return(a.length%2?a[m]:(a[m-1]+a[m])/2).toFixed(1);};
+const avg=a=>a.length?(a.reduce((x,y)=>x+y,0)/a.length).toFixed(1):"–";
+async function load(){rows=await api("/api/sessions");
+ const ok=rows.filter(s=>s.kind==="study"&&s.status==="complete"&&s.outcome?.result!=="Technical problem");
+ table($("sum"),[["Mode","People","Found it","Median seconds (found it)","Sure 1–5","Easy 1–5"],...[["plain","A · directions only"],["banner","B · with the banner"]].map(([m,n])=>{const a=ok.filter(s=>s.mode===m),f=a.filter(s=>s.outcome.result==="Correct building");return[n,a.length,f.length+" of "+a.length,med(f.map(s=>s.test.ms/1000)),avg(a.map(s=>+s.after.confidence[0])),avg(a.map(s=>+s.after.ease[0]))];})]);
+ table($("all"),[Object.keys(COL),...rows.map(s=>Object.values(COL).map(f=>f(s)))]);}
+$("csv").onclick=()=>{const q=v=>{v=String(v??"");if(/^[=+\-@]/.test(v))v="'"+v;return'"'+v.replaceAll('"','""')+'"';};const t=[Object.keys(COL),...rows.map(s=>Object.values(COL).map(f=>f(s)))].map(r=>r.map(q).join(",")).join("\n");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["﻿"+t],{type:"text/csv"}));a.download="banner-test.csv";a.click();};
+$("wb").onclick=async()=>{const c=$("w").value.trim().toUpperCase();if(!confirm("Delete all data for "+c+"? This can't be undone."))return;try{await api("/api/withdraw",{code:c});$("msg").textContent=c+" deleted.";load();}catch(e){$("msg").textContent=e.message;}};
+load().catch(e=>$("msg").textContent=e.message);
+</script></body></html>

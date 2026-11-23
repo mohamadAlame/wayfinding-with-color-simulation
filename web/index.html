@@ -1,0 +1,57 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Finding a building</title><link rel="stylesheet" href="/style.css"></head><body>
+<main class="wrap" id="page">
+<section id="setup"><nav><a href="/settings">Settings</a><a href="/results">Results</a></nav>
+ <h1>New participant</h1>
+ <p class="muted">Set this up before they sit down. Code: <strong class="code" id="code"></strong></p>
+ <p id="problem" class="error"></p>
+ <label class="f">Mode<select id="mode"><option value="plain">A</option><option value="banner">B</option></select><small id="counts"></small></label>
+ <label class="f">Directions<select id="delivery"><option value="screen">Shown on screen</option><option value="aloud">Hidden: I read them out</option></select></label>
+ <label class="f">Kind of run<select id="kind"><option value="study">Study</option><option value="pilot">Pilot (not counted)</option></select></label>
+ <details><summary>What I read out in this mode</summary><p class="say" id="script"></p></details>
+ <div class="actions"><button id="begin">Begin</button></div></section>
+
+<section id="consent" hidden><p class="muted">Read this to the participant</p><h1>Before we start</h1><ul class="sheet">
+ <li><strong>What this is:</strong> a student project for a Human-Centered Design course at AUB, about how people find their way.</li>
+ <li><strong>What you do:</strong> a short practice, then you listen to or read directions and find a building in Google Street View. About 8 minutes.</li>
+ <li><strong>What is recorded:</strong> your answers, how long you take, and whether you find the building. No name, audio or video. Street View is loaded from Google, which receives its usual technical data.</li>
+ <li><strong>Voluntary:</strong> you can stop at any time without giving a reason.</li>
+ <li><strong>Later:</strong> your data is stored under the code <strong class="code" id="code2"></strong>. Give us the code and we delete it.</li>
+ <li>We are testing the directions, not you.</li></ul>
+ <label class="check"><input type="checkbox" id="c1"> The participant is 18 or older.</label>
+ <label class="check"><input type="checkbox" id="c2"> The participant heard this and agreed to take part.</label>
+ <div class="actions"><button id="agree" disabled>Continue</button><button class="alt" id="decline">They declined</button></div></section>
+
+<section id="about" hidden><h1>About you</h1><form id="aboutForm">
+ <fieldset><legend>How well do you know the area around AUB and AUBMC?</legend><div class="opts" data-q="area" data-o="Never been|Been a few times|Know it well"></div></fieldset>
+ <fieldset><legend>Have you used Google Street View before?</legend><div class="opts" data-q="streetview" data-o="Never|A few times|Often"></div></fieldset>
+ <fieldset><legend>Do you have difficulty telling some colours apart?</legend><div class="opts" data-q="colour_vision" data-o="No|Yes|Not sure|Prefer not to say"></div></fieldset>
+ <button>Continue</button></form></section>
+
+<section id="practiceIntro" hidden><h1>Practice</h1><p>This one is only to get used to moving around.</p><ul class="sheet">
+ <li>Drag the picture to look around.</li><li>Click an arrow on the ground, or further up the street, to move.</li><li>Press <strong>I'm there</strong> when you think you have arrived.</li></ul>
+ <p class="say" id="practiceSay"></p><div class="actions"><button id="practiceGo">Start practice</button></div></section>
+
+<section id="practiceDone" hidden><h1>Practice done</h1><p>Next is the real one. You get the directions once, so make sure you have them before you continue.</p>
+ <div class="actions"><button id="toDirections">Continue</button><button class="alt" id="again">Practice again</button></div></section>
+
+<section id="directions" hidden><h1>Your directions</h1><p class="say" id="say"></p>
+ <p class="muted">When you continue, you can't come back to the directions.</p><div class="actions"><button id="directionsGo">Continue, go ahead</button></div></section>
+
+<section id="after" hidden><h1>A few questions</h1><form id="afterForm">
+ <fieldset><legend>How sure are you that you reached the right building?</legend><div class="opts" data-q="confidence" data-o="1 Not sure|2|3|4|5 Very sure"></div></fieldset>
+ <fieldset><legend>How easy were the directions to follow?</legend><div class="opts" data-q="ease" data-o="1 Very hard|2|3|4|5 Very easy"></div></fieldset>
+ <fieldset><legend>Did you recognise the place you were walking in?</legend><div class="opts" data-q="recognised" data-o="No|Yes"></div></fieldset>
+ <label class="f">What did you use to find the building?<textarea name="used" rows="3"></textarea></label>
+ <button>Finish</button></form></section>
+
+<section id="handover" hidden><h1>Thank you</h1><p>That's everything. Please hand the laptop back.</p><p>Your code is <strong class="code" id="code3"></strong>. Keep it if you might want your data deleted.</p>
+ <div class="actions"><button class="alt" id="toOutcome">Continue</button></div></section>
+
+<section id="outcome" hidden><p class="muted">For the experimenter</p><h1>Where did they end?</h1><p class="small muted">Their final view is frozen below.</p><div id="reviewSlot"></div>
+ <form id="outcomeForm"><h2>Result</h2><fieldset><div class="opts" data-q="result" data-o="Correct building|Wrong building|Gave up|Technical problem"></div></fieldset>
+ <label class="f">Note (no names)<textarea name="note" rows="2"></textarea></label><p id="saveErr" class="error"></p><button>Save and finish</button></form></section>
+<p id="stopLine" hidden style="margin-top:48px;text-align:right"><button class="quiet" id="stopPage">Stop the session…</button></p>
+</main>
+<div id="walk" hidden><div id="frame"><div id="loading">Loading…</div></div><div class="bar"><button id="there">I'm there</button><button class="quiet" id="stop">Stop…</button></div></div>
+<script src="/common.js"></script><script src="/app.js"></script></body></html>
