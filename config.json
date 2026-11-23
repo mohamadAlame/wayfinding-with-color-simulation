@@ -1,6 +1,0 @@
-{
- "practice": {"view": "https://maps.google.com/maps?layer=c&cbll=33.8955,35.4783&cbp=11,0,0,0,0&output=svembed", "directions": "Walk to the end of the street and stop at the corner."},
- "test": {"view": ""},
- "directions": {"plain": "", "banner": ""},
- "limitMinutes": 5
-}

@@ -1,8 +1,9 @@
-# Banner test
+# Banner test, 3D version
 
-Double-click `start.command`, or run `python3 server.py`, then open http://localhost:8700 (needs internet for Street View).
+Remote study: people open a link, walk a made-up 3D street and choose a building. Separate branch (`3d-street`) from the Google Street View version.
 
-- **/settings**: Street View starts and the directions for modes A (directions only) and B (with the banner).
-- **/**: run a participant. **/results**: summary, CSV, withdraw by code.
-- `data/` holds one file per participant code, no names, and is not committed to git.
-- **/banner**: draws a banner on Street View (needs a Google Maps JavaScript API key in Settings). Corners are placed once per spot on the route, saved in `banner.json`.
+- Run: `python3 server.py`, then http://localhost:8710/ . It prints the hidden admin address (`/admin-<token>`), also in `data/admin-token.txt`.
+- Mode A: every banner is the same blue. Mode B: each building's banner has its own colour. Everything else is identical.
+- `data/` (sessions, settings, admin token) is not in git. No names or IP addresses are stored.
+- To host it: `STUDY_HOST`, `STUDY_PORT`, `STUDY_DATA`; put HTTPS in front.
+- three.js 0.160.0, MIT licence (`web/three-LICENSE.txt`).
