@@ -1,0 +1,32 @@
+[Unit]
+Description=Banner study (ENGM 664)
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 -I /opt/banner-study/server.py
+Environment=STUDY_HOST=127.0.0.1 STUDY_PORT=8710 STUDY_DATA=/var/lib/banner-study PYTHONDONTWRITEBYTECODE=1
+DynamicUser=yes
+StateDirectory=banner-study
+StateDirectoryMode=0700
+UMask=0077
+Restart=on-failure
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+NoNewPrivileges=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6
+IPAddressDeny=any
+IPAddressAllow=localhost
+CapabilityBoundingSet=
+SystemCallFilter=@system-service
+MemoryMax=512M
+TasksMax=200
+# the admin address would otherwise be written to the system log
+StandardOutput=null
+
+[Install]
+WantedBy=multi-user.target

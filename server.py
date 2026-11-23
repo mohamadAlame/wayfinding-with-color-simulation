@@ -1,7 +1,8 @@
 """Remote banner study. Python 3.9+, no installs. Run: python3 server.py
 Admin page: /admin-<token>, printed at start. The token is in admin-token.txt (git-ignored)."""
-import hmac, json, os, re, secrets, sys, tempfile, threading, time
+import gzip, hmac, json, os, re, secrets, sys, tempfile, threading, time
 from datetime import datetime, timezone
+from functools import lru_cache
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
@@ -104,13 +105,23 @@ def clean(b):
         out["problem"] = txt(b["problem"], 200)
     return out
 
+@lru_cache(maxsize=16)
+def gz(body):
+    return gzip.compress(body, 6)
+
 class H(BaseHTTPRequestHandler):
     server_version, sys_version, timeout = "study", "", 20
 
     def send(self, status, body, ctype="application/json", cache="no-store"):
         if not isinstance(body, bytes):
             body = json.dumps(body, ensure_ascii=False).encode()
+        zipped = len(body) > 1000 and "gzip" in self.headers.get("Accept-Encoding", "")
+        if zipped:
+            body = gz(body)
         self.send_response(status)
+        if zipped:
+            self.send_header("Content-Encoding", "gzip")
+        self.send_header("Vary", "Accept-Encoding")
         for k, v in (("Content-Type", ctype + "; charset=utf-8"), ("Content-Length", str(len(body))), ("Cache-Control", cache), ("X-Content-Type-Options", "nosniff"),
                      ("Referrer-Policy", "no-referrer"), ("X-Frame-Options", "DENY"), ("X-Robots-Tag", "noindex"),
                      ("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; frame-ancestors 'none'")):
