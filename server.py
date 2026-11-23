@@ -7,6 +7,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, "web")
 DATA = os.environ.get("BANNER_DATA") or os.path.join(HERE, "data")
 CONFIG = os.environ.get("BANNER_CONFIG") or os.path.join(HERE, "config.json")
+BANNER = os.environ.get("BANNER_FILE") or os.path.join(HERE, "banner.json")
+KEY = os.environ.get("BANNER_KEY") or os.path.join(HERE, "google-key.txt")  # git-ignored
 PORT = int(os.environ.get("BANNER_PORT", "8700"))
 HOSTS = {f"localhost:{PORT}", f"127.0.0.1:{PORT}"}
 CODE = re.compile(r"^P-[A-Z2-9]{4}$")
@@ -56,9 +58,18 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/config":
             with open(CONFIG, encoding="utf-8") as f:
                 return self.send(200, json.load(f))
+        if p == "/api/banner":
+            with open(BANNER, encoding="utf-8") as f:
+                return self.send(200, json.load(f))
+        if p == "/api/key":
+            key = ""
+            if os.path.exists(KEY):
+                with open(KEY, encoding="utf-8") as f:
+                    key = f.read().strip()
+            return self.send(200, {"key": key})
         if p == "/api/sessions":
             return self.send(200, sessions())
-        name = {"/": "index.html", "/settings": "settings.html", "/results": "results.html"}.get(p, p.lstrip("/"))
+        name = {"/": "index.html", "/settings": "settings.html", "/results": "results.html", "/banner": "banner.html"}.get(p, p.lstrip("/"))
         full = os.path.join(WEB, name)
         ext = os.path.splitext(name)[1]
         if "/" in name or ext not in TYPES or not os.path.isfile(full):
@@ -80,6 +91,12 @@ class H(BaseHTTPRequestHandler):
             with LOCK:
                 if p == "/api/config":
                     write(CONFIG, body)
+                elif p == "/api/banner":
+                    write(BANNER, body)
+                elif p == "/api/key":
+                    with open(KEY, "w", encoding="utf-8") as f:
+                        f.write(str(body.get("key", "")).strip())
+                    os.chmod(KEY, 0o600)
                 elif p in ("/api/session", "/api/withdraw"):
                     code = body.get("code", "")
                     if not CODE.match(code):
