@@ -20,14 +20,16 @@ _T = {"R1": ("tene mafra2 3al yamin", "awal mafra2 3al shmel", "yamin", "a7mar")
 DIRECTIONS1 = {r: {  # Lebanese Arabizi; study 1 (posters only), closed 27 Nov
     "plain": f"Btemsho deghre, btekhdo {a}, w ba3da {b}. Btkoun tene bineye 3al {s}.",
     "coloured": f"Btemsho deghre, btekhdo {a}, w ba3da {b}. Btkoun l bineye yalli 3layha yafta/poster kbir {c}, 3al {s}."} for r, (a, b, s, c) in _T.items()}
-# Study 2 (posters and lines on the road). Routes 2 and 4 now say "skip the first, take the second":
+# Study 2. Same posters, no lines: the guard gives turn-by-turn directions. Coloured: the guard gives no turns,
+# only "follow the line of this colour"; the line and the poster on the right building share that colour.
+# Routes 2 and 4 now say "skip the first, take the second":
 # "awal ..., w ba3da tene ..." was read by some as "first turn, then second turn".
 _T2 = {"R1": "Btemsho deghre, btekhdo tene mafra2 3al yamin, w ba3da awal mafra2 3al shmel.",
        "R2": "Btemsho deghre, btekhdo awal mafra2 3al shmel. Ba3da btetrko awal mafra2 3al yamin, w btekhdo l tene.",
        "R3": "Btemsho deghre, btekhdo tene mafra2 3al shmel, w ba3da awal mafra2 3al yamin.",
        "R4": "Btemsho deghre, btekhdo awal mafra2 3al yamin. Ba3da btetrko awal mafra2 3al shmel, w btekhdo l tene."}
 DIRECTIONS2 = {r: {"plain": f"{_T2[r]} Btkoun tene bineye 3al {s}.",
-                   "coloured": f"{_T2[r]} Btkoun l bineye yalli 3layha yafta/poster kbir {c}, 3al {s}. W fi khatt {c} 3al ard, lhaa2o byousalak la 3enda."}
+                   "coloured": f"Lhaa2o l khatt l {c} yalli 3al ard. Byousalkon 3al bineye yalli 3layha yafta/poster kbir {c}."}
                for r, (a, b, s, c) in _T.items()}
 STUDY = 2  # new participants go here; study 1 stays readable
 DEFAULT = {"v": 3, "open": True, "directions": DIRECTIONS1, "directions2": DIRECTIONS2}
