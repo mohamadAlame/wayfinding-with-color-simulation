@@ -1,6 +1,6 @@
 """Auto-deploy: put the newest commit of the GitHub repository live, if it changed and passes basic checks.
 Runs as root on the server: every 5 minutes (banner-study-deploy.timer) and at once when the admin page's
-"Check GitHub now" writes deploy-request into the data folder (banner-study-deploy.path).
+"Get the latest from GitHub now" writes deploy-request into the data folder (banner-study-deploy.path).
 Only the code is replaced (server.py and web/). The data folder (sessions, settings, admin token) is never touched.
 Settings: /etc/banner-study/deploy.json, {"repo": "https://github.com/<owner>/<name>.git", "branch": "main"}."""
 import json, os, shutil, subprocess, sys, tempfile, time

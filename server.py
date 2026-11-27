@@ -120,7 +120,7 @@ def clean(b):
         if b.get(k) is True:
             out[k] = True
     if isinstance(b.get("about"), dict):
-        out["about"] = {k: txt(b["about"].get(k), 40) for k in ("sense", "games", "colour_vision", "before") if k in b["about"]}
+        out["about"] = {k: txt(b["about"].get(k), 40) for k in ("sense", "games", "colour_vision", "before", "age", "gender", "aubmc") if k in b["about"]}
     if isinstance(b.get("end"), dict):
         out["end"] = {k: txt(b["end"].get(k), 600) for k in ("remember", "noticed", "banners", "lines", "lines_notes") if k in b["end"]}
     if b.get("problem"):

@@ -28,8 +28,8 @@ async function begin() {
   document.querySelectorAll('[data-code]').forEach(e => e.textContent = S.code); show('welcome');
 }
 $('c1').onchange = () => $('agree').disabled = !$('c1').checked;
-$('agree').onclick = () => { saveQuiet({consent: true}); show('about'); };
-$('aboutForm').onsubmit = e => { e.preventDefault(); saveQuiet({about: answers(e.target)}); show('practice'); };
+// Straight from consent to the practice; every question comes after the walks.
+$('agree').onclick = () => { saveQuiet({consent: true}); show('practice'); };
 $('practiceSay').textContent = PRACTICE.directions;
 $('goPractice').onclick = () => { $('practiceSay').hidden = true; startWalk('practice'); };
 $('again').onclick = () => { $('practiceSay').hidden = false; show('practice'); };
@@ -41,9 +41,10 @@ $('afterForm').onsubmit = e => {
   if (++at < S.plan.length) ready(); else show('end');
 };
 $('endForm').onsubmit = e => { e.preventDefault(); S.end = answers(e.target); saveQuiet({end: S.end}); show('end2'); };
-$('end2Form').onsubmit = async e => {
+$('end2Form').onsubmit = e => { e.preventDefault(); S.end = {...S.end, ...answers(e.target)}; saveQuiet({end: S.end}); show('about'); };
+$('aboutForm').onsubmit = async e => {
   e.preventDefault(); const b = e.submitter || e.target.querySelector('button'); b.disabled = true; $('saveErr').textContent = '';
-  try { await save({end: {...S.end, ...answers(e.target)}, walks: S.walks, complete: true}); store.set({code: S.code, token: S.token, stage: 'done'}); show('thanks'); }
+  try { await save({about: answers(e.target), end: S.end, walks: S.walks, complete: true}); store.set({code: S.code, token: S.token, stage: 'done'}); show('thanks'); }
   catch { $('saveErr').textContent = 'Not saved. Check your connection and press Finish again.'; b.disabled = false; }
 };
 $('erase').onclick = async () => { if (!confirm('Delete all your answers? This can’t be undone.')) return; try { await api('erase', {code: S.code, token: S.token}); message('Deleted', 'Your answers were deleted. Thank you anyway.'); } catch { alert('Could not delete. Please try again.'); } };
