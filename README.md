@@ -1,6 +1,6 @@
-# Banner test, 3D version
+# Wayfinding with color simulation
 
-Remote study: people open a link, walk a made-up 3D street and choose a building. Separate branch (`3d-street`) from the Google Street View version.
+Remote study for ENGM 664 (Team 5): people open a link, walk a made-up 3D street and choose a building, once with colour-coded posters (and, in study 2, coloured lines on the road) and once without. Grew out of a Google Street View version.
 
 - Run: `python3 server.py`, then http://localhost:8710/ . It prints the hidden admin address (`/admin-<token>`), also in `data/admin-token.txt`.
 - Everyone does one practice and two walks: one with every poster the same blue, one with a colour per building. Four routes, same length (25 moves), two turns, three junctions.
@@ -11,5 +11,6 @@ Remote study: people open a link, walk a made-up 3D street and choose a building
 - Slots count everyone who opened the link in the last 10 minutes, so people who open it together get different slots.
 - Routes are used in pairs (1+2, 3+4). Neighbouring testers swap colours on the same pair; testers 5-8 repeat with the routes in the other order. Recruit in multiples of 8 (`CELLS` in `server.py`).
 - `data/` (sessions, settings, admin token) is not in git. No names or IP addresses are stored.
-- To host it: `STUDY_HOST`, `STUDY_PORT`, `STUDY_DATA`; put HTTPS in front.
+- To host it: `STUDY_HOST`, `STUDY_PORT`, `STUDY_DATA`; put HTTPS in front. `deploy/banner-study.service` is the systemd unit used on the server.
+- **Auto-deploy.** The server puts the newest commit on `main` live by itself: every 5 minutes, or at once with **Check GitHub now** on the admin page. Push to `main` and it is live within minutes, so test locally first (`python3 server.py`). Only `server.py` and `web/` are replaced; the data folder is never touched. A version with missing files or a syntax error (Python, or JavaScript via `node --check`) is not put live, and one that fails to start is rolled back. Files: `deploy/deploy.py` (run as root), `deploy/banner-study-deploy.timer`, `deploy/banner-study-deploy.path`, `deploy/banner-study-deploy.service`; the repository address is in `/etc/banner-study/deploy.json` on the server. Install: copy `deploy.py` to `/opt/banner-study-deploy/`, the three units to `/etc/systemd/system/`, then `systemctl enable --now banner-study-deploy.timer banner-study-deploy.path`.
 - three.js 0.160.0, MIT licence (`web/three-LICENSE.txt`).

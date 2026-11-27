@@ -12,6 +12,7 @@ DATA = os.environ.get("STUDY_DATA") or os.path.join(HERE, "data")
 SESS = os.path.join(DATA, "sessions")
 CONFIG = os.path.join(DATA, "config.json")
 TOKEN_FILE = os.path.join(DATA, "admin-token.txt")
+DEPLOY_STATUS, DEPLOY_REQUEST = os.path.join(DATA, "deploy.json"), os.path.join(DATA, "deploy-request")  # see deploy/deploy.py
 HOST, PORT = os.environ.get("STUDY_HOST", "127.0.0.1"), int(os.environ.get("STUDY_PORT", "8710"))
 ROUTES = {"R1": "D-R2", "R2": "E-R2", "R3": "D-R2", "R4": "E-R2"}  # route: its right building
 _T = {"R1": ("tene mafra2 3al yamin", "awal mafra2 3al shmel", "yamin", "a7mar"), "R2": ("awal mafra2 3al shmel", "tene mafra2 3al yamin", "shmel", "asfar"),
@@ -181,7 +182,7 @@ class H(BaseHTTPRequestHandler):
                     return self.start(b)
                 if p in ("/api/save", "/api/erase"):
                     return self.change(p, b)
-                m = re.match(r"^/api/admin/(state|config|delete)$", p)
+                m = re.match(r"^/api/admin/(state|config|delete|check)$", p)
                 if m and self.admin(self.headers.get("X-Admin", "")):
                     return self.manage(m.group(1), b)
             self.send(404, {"error": "not found"})
@@ -252,8 +253,16 @@ class H(BaseHTTPRequestHandler):
         self.send(200, {"ok": True})
 
     def manage(self, what, b):
+        if what == "check":  # the server's deploy job sees this file and checks GitHub at once
+            with open(DEPLOY_REQUEST, "w") as f:
+                f.write(str(time.time()))
+            return self.send(200, {"ok": True})
         if what == "state":
-            return self.send(200, {"config": read(CONFIG), "cells": CELLS, "study": STUDY, "sessions": [{k: v for k, v in s.items() if k != "token"} for s in sessions()]})
+            try:
+                deploy = read(DEPLOY_STATUS)
+            except (OSError, ValueError):
+                deploy = None
+            return self.send(200, {"deploy": deploy, "config": read(CONFIG), "cells": CELLS, "study": STUDY, "sessions": [{k: v for k, v in s.items() if k != "token"} for s in sessions()]})
         if what == "config":
             d = {r: {k: txt(b["directions2"][r][k], 1000).strip() for k in ("plain", "coloured")} for r in ROUTES}
             if not all(v for x in d.values() for v in x.values()):

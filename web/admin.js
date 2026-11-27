@@ -38,7 +38,15 @@ let ALL = [];
 async function load(settings) {
   raw = await api('state'); raw.sessions.sort((a, b) => b.t - a.t); render(settings);
 }
+const ago = iso => { if (!iso) return '–'; const s = (Date.now() - new Date(iso)) / 1000; return s < 90 ? Math.round(s) + ' s ago' : s < 5400 ? Math.round(s / 60) + ' min ago' : new Date(iso).toLocaleString(); };
+function showDeploy(d) {
+  if (!d) return $('dep').textContent = 'Auto-deploy is not set up on this server.';
+  const c = d.live || d.latest, gh = d.repo ? d.repo.replace(/\.git$/, '') : '';
+  $('dep').replaceChildren(...[['Repository', gh ? gh + ' (' + d.branch + ')' : 'none set'], ['Last check', ago(d.checked) + ': ' + d.result], ['Live version', d.live ? d.live.sha.slice(0, 7) + ' “' + d.live.message + '” by ' + d.live.author + ', live since ' + ago(d.live_since) : 'as installed by hand']].map(([a, b]) => { const p = el('p'); p.append(el('strong', a + ': '), b); return p; }));
+  if (gh) { const a = el('a', 'Open the repository'); a.href = gh; a.target = '_blank'; $('dep').append(a); }
+}
 function render(settings) {
+  showDeploy(raw.deploy);
   const keep = s => studyOf(s) === STUDY && !(STUDY === 2 && $('newOnly').checked && returning(s));
   st = {...raw, sessions: raw.sessions.filter(keep)}; ALL = st.sessions.flatMap(walksOf);
   document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('alt', +b.dataset.tab !== STUDY)); document.querySelectorAll('.only2').forEach(e => e.hidden = STUDY !== 2);
@@ -61,6 +69,16 @@ function render(settings) {
   }
 }
 $('refresh').onclick = () => load();
+$('check').onclick = async () => {
+  const before = raw.deploy?.checked; $('check').disabled = true; $('depMsg').textContent = 'Checking…';
+  try { await api('check'); } catch (x) { $('depMsg').textContent = 'Could not ask: ' + x.message; $('check').disabled = false; return; }
+  for (let i = 0; i < 45; i++) { // a new version restarts the server for a moment, so failed requests are retried
+    await new Promise(r => setTimeout(r, 2000));
+    try { const s = await api('state'); if (s.deploy?.checked && s.deploy.checked !== before) { await load(); $('depMsg').textContent = s.deploy.result; break; } } catch {}
+    if (i === 44) $('depMsg').textContent = 'No answer from the deploy job yet. Press Refresh in a minute.';
+  }
+  $('check').disabled = false;
+};
 document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { stopReplay(); $('one').hidden = true; use(+b.dataset.tab); render(); });
 $('newOnly').onchange = () => render();
 $('f').onsubmit = async e => { e.preventDefault(); try { await api('config', {open: $('open').checked, directions2: Object.fromEntries(Object.keys(WORLD2).map(r => [r, {plain: $('d-' + r + 'plain').value, coloured: $('d-' + r + 'coloured').value}]))}); $('msg').textContent = 'Saved.'; } catch (x) { $('msg').textContent = 'Not saved: ' + x.message; } };

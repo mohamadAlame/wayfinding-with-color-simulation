@@ -1,0 +1,8 @@
+[Unit]
+Description=Banner study: put the newest GitHub version live
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 -I /opt/banner-study-deploy/deploy.py

@@ -1,0 +1,9 @@
+[Unit]
+Description=Banner study: "Check GitHub now" on the admin page
+
+[Path]
+PathExists=/var/lib/private/banner-study/deploy-request
+Unit=banner-study-deploy.service
+
+[Install]
+WantedBy=paths.target
