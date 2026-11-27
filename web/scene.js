@@ -1,5 +1,5 @@
 import * as T from './three.module.min.js';
-import {COLOURS, graph} from './world.js';
+import {COLOURS, graph, pathTo} from './world.js';
 const FH = 3.4, GH = 4.4;
 function rng(seed) { let s = seed >>> 0; return () => ((s = Math.imul(s ^ s >>> 15, 1 | s) + 0x6D2B79F5 | 0, ((s ^ s >>> 14) >>> 0) / 4294967296)); }
 function canvasTex(w, h, draw, repeat = true) {
@@ -146,7 +146,7 @@ export class Street {
     const w = this.world, bag = new Bag(), r = rng(w.seed * 131 + 4), L = o => new T.MeshLambertMaterial({vertexColors: true, ...o});
     const mats = {plain: L({}), two: L({side: T.DoubleSide}), leaf: L({}), road: L({map: canvasTex(256, 256, (g, W, H) => { g.fillStyle = '#73757a'; g.fillRect(0, 0, W, H); speckle(g, W, H, 6000, rng(2), .12); })}),
       pave: L({map: canvasTex(128, 128, (g, W, H) => { g.fillStyle = '#c3bcae'; g.fillRect(0, 0, W, H); speckle(g, W, H, 900, rng(3), .1); g.strokeStyle = 'rgba(70,60,45,.25)'; g.lineWidth = 2; for (let i = 0; i < 128; i += 64) { g.strokeRect(0, i, 128, 64); g.strokeRect(i, 0, 64, 128); } })}),
-      paint: L({polygonOffset: true, polygonOffsetFactor: -2}), ground: L({map: ground()}), shops: L({map: shops()}), sign: L({map: signTex()}), ad: L({map: adTex()})};
+      paint: L({polygonOffset: true, polygonOffsetFactor: -2}), guide: L({polygonOffset: true, polygonOffsetFactor: -4}), ground: L({map: ground()}), shops: L({map: shops()}), sign: L({map: signTex()}), ad: L({map: adTex()})};
     for (const k of ['stone', 'concrete', 'brick', 'glass', 'balcony', 'white', 'old']) mats[k] = L({map: facade(k)});
     const flat = (k, x0, x1, z0, z1, y, uv, tint) => bag.quad(k, [x0, y, z1], [x1, y, z1], [x1, y, z0], [x0, y, z0], [0, 1, 0], (x1 - x0) / uv, (z1 - z0) / uv, tint);
     flat('road', -220, 300, -380, 160, 0, 7);
@@ -214,6 +214,7 @@ export class Street {
     // cables over the street, as in Hamra
     const pts = []; for (const [, x0, z0, x1, z1] of w.lines) { const along = x0 === x1, n = Math.abs(along ? z1 - z0 : x1 - x0), d = Math.sign(along ? z1 - z0 : x1 - x0); for (let t = 14; t < n; t += 13 + r() * 16) { const h = 8 + r() * 3, a = 8, sk = (r() - .5) * 8; let l = null; for (let i = 0; i <= 10; i++) { const u = -1 + i / 5, y = h - (1 - u * u) * .9, o = d * t + sk * u, v = along ? [x0 + u * a, y, z0 + o] : [x0 + o, y, z0 + u * a]; if (l) pts.push(...l, ...v); l = v; } } }
     if (pts.length) { const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(pts, 3)); this.scene.add(new T.LineSegments(g, new T.LineBasicMaterial({color: '#3b3d3f'}))); }
+    if (coloured && w.guides) this.guides(flat);
     bag.meshes(mats, this.scene);
     const cache = {};
     for (const q of this.banners) {
@@ -257,6 +258,21 @@ export class Street {
       if (b.face === 'w') { add(x0 - e, z1 - w / 2 - 1, -Math.PI / 2); add(x0 + w / 2 + .7, z1 + .12, 0); }
       if (b.face === 'e') { add(x1 + e, z1 - w / 2 - 1, Math.PI / 2); add(x1 - w / 2 - .7, z1 + .12, 0); }
     }
+  }
+  // A painted line from the start to each poster, in its colour, side by side where they share a street.
+  // Lines are ordered so they never cross: at the corner where two part, the one turning left is on the left.
+  guides(flat) {
+    const w = this.world, N = graph(w), side = (a, n, b) => Math.sign((n.x - a.x) * (b.z - n.z) - (n.z - a.z) * (b.x - n.x));
+    const L = w.buildings.filter(b => b.banner).map(b => ({b, p: pathTo(w, b.id, N).map(id => N[id])}));
+    const turnAt = (l, k) => { const p = l.p; if (k >= p.length) { const c = {x: (l.b.x0 + l.b.x1) / 2, z: (l.b.z0 + l.b.z1) / 2}; return side(p[p.length - 2], p[p.length - 1], c); } return side(p[k - 2], p[k - 1], p[k]); };
+    L.sort((A, B) => { let k = 1; while (k < A.p.length && k < B.p.length && A.p[k] === B.p[k]) k++; return k < 2 ? 0 : turnAt(A, k) - turnAt(B, k); });
+    const gap = .9, half = .2;
+    L.forEach((l, i) => {
+      const o = (i - (L.length - 1) / 2) * gap, c = hex(COLOURS[l.b.banner]), p = l.p;
+      const right = (a, b) => { const d = Math.hypot(b.x - a.x, b.z - a.z); return [-(b.z - a.z) / d, (b.x - a.x) / d]; };
+      const pts = p.map((n, k) => { const r0 = k ? right(p[k - 1], n) : right(n, p[k + 1]), r1 = k < p.length - 1 ? right(n, p[k + 1]) : r0, same = Math.abs(r0[0] - r1[0]) + Math.abs(r0[1] - r1[1]) < .01; return same ? [n.x + o * r0[0], n.z + o * r0[1]] : [n.x + o * (r0[0] + r1[0]), n.z + o * (r0[1] + r1[1])]; });
+      for (let k = 1; k < pts.length; k++) { const [ax, az] = pts[k - 1], [bx, bz] = pts[k]; flat('guide', Math.min(ax, bx) - half, Math.max(ax, bx) + half, Math.min(az, bz) - half, Math.max(az, bz) + half, .03, 1, c); }
+    });
   }
   setArrows(node, nodes) {
     this.arrows.clear();

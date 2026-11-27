@@ -47,11 +47,12 @@ const layout1 = () => ({start: {node: 'a0', yaw: 0}, target: 'E-R2',
   buildings: [...avenue(), ...sides(-60, false), B('C2E', 46, 53, -150, -110, 'w', 'concrete', 5), B('2-a', 28, 45, -156, -138, 's', 'balcony', 5), B('2-c', 28, 45, -122, -105, 'n', 'old', 3)],
   blocks: [[-130,-4,-56,40],[4,210,-56,40],[-130,-4,-126,-64],[4,76,-126,-64],[84,146,-270,-64],[154,210,-270,-64],[-130,-4,-270,-134],[4,76,-270,-134],[44,76,-134,-126]],
   lines: [['a', 0, 0, 0, -190], ['b', -80, -60, 170, -60], ['c', -80, -130, 40, -130], ['d', 80, -60, 80, -160], ['e', 150, -60, 150, -160]]});
-function finish(w, {mirror, seed, colours, target}) {
-  const key = {target, blue: colours[0], pink: colours[1], brown: colours[2], b2: colours[3], b3: colours[4], b4: colours[5]};
+function finish(w, {mirror, seed, colours, target, posters}) {
+  const key = posters ? {target, ...posters} : {target, blue: colours[0], pink: colours[1], brown: colours[2], b2: colours[3], b3: colours[4], b4: colours[5]};
+  if (posters) { const c = w.target === 'D-R2' ? 'C1W' : 'C2W'; w.buildings = w.buildings.map(b => b.id === c ? {...b, banner: 'cross'} : b); }
   const swap = {stone: 'stone', glass: 'glass', concrete: ['concrete', 'white', 'brick', 'balcony'], brick: ['brick', 'old', 'balcony', 'concrete'], old: ['old', 'brick', 'white', 'old'], white: ['white', 'concrete', 'old', 'brick'], balcony: ['balcony', 'balcony', 'concrete', 'balcony']};
   w.buildings = w.buildings.map((b, i) => {
-    b = {...b}; if (b.banner) b.banner = key[b.banner];
+    b = {...b}; if (b.banner) b.banner = key[b.banner] || undefined;
     // a different look for each neighbourhood; buildings with banners keep their shape in all four
     if (!b.lot && !b.banner && Array.isArray(swap[b.style])) { b.style = swap[b.style][(i * 7 + seed * 3) % 4]; b.floors = Math.max(3, b.floors + ((i * 5 + seed) % 3) - 1); if (/^[DE]-/.test(b.id)) b.floors = Math.min(b.floors, 4); if (b.style === 'old') b.floors = Math.min(b.floors, 3); }
     if (b.lot && !/^[DE]-/.test(b.id)) b.kind = ['parking', 'park', 'site', 'parking'][(i + seed) % 4];
@@ -67,14 +68,24 @@ export const ROUTES = {
   R3: finish(layout2(), {mirror: true, seed: 3, target: 'purple', colours: ['blue', 'green', 'pink', 'red', 'yellow', 'brown']}),
   R4: finish(layout1(), {mirror: false, seed: 4, target: 'green', colours: ['blue', 'yellow', 'brown', 'pink', 'red', 'purple']}),
 };
+// Study 2: four posters per route, each colour once (the right building, the same spot on the other side street,
+// one on the avenue, one down the other cross street), and in the coloured walk a line of each colour on the road.
+export const ROUTES2 = {
+  R1: finish(layout2(), {mirror: false, seed: 1, target: 'red', posters: {blue: 'blue', brown: 'yellow', cross: 'green'}}),
+  R2: finish(layout1(), {mirror: true, seed: 2, target: 'yellow', posters: {blue: 'purple', brown: 'red', cross: 'blue'}}),
+  R3: finish(layout2(), {mirror: true, seed: 3, target: 'purple', posters: {blue: 'green', brown: 'blue', cross: 'red'}}),
+  R4: finish(layout1(), {mirror: false, seed: 4, target: 'green', posters: {blue: 'red', brown: 'purple', cross: 'yellow'}}),
+};
+for (const w of Object.values(ROUTES2)) w.guides = true;
 export const PRACTICE = {seed: 9,
-  start: {node: 'p0', yaw: 0}, target: 'P-end',
+  start: {node: 'p0', yaw: 0}, target: 'P-a2', directions: 'Btemsho deghre, btekhdo awal mafra2 3al yamin. Btkoun tene bineye 3al shmel.',
   buildings: [
-    B('P-end', 56, 74, -60, -20, 'w', 'stone', 4), B('P-S', -20, 20, 12, 28, 'n', 'brick', 4), B('P-N', -26, 26, -76, -58, 's', 'balcony', 5),
+    B('P-end', 66, 84, -62, -20, 'w', 'stone', 4), B('P-S', -20, 20, 12, 28, 'n', 'brick', 4), B('P-N', -26, 4.5, -76, -58, 's', 'balcony', 5),
     B('P-L1', -25, -7.5, -14, 11, 'e', 'old', 3), B('P-L2', -25, -7.5, -57, -17, 'e', 'concrete', 4), B('P-R1', 7.5, 25, -32, 11, 'w', 'white', 4),
-    B('P-a', 28, 55, -66, -48, 's', 'brick', 4), B('P-b', 27, 55, -32, -14, 'n', 'balcony', 5),
+    B('P-a1', 7.5, 28, -66, -47.5, 's', 'brick', 4), B('P-a2', 31, 54, -66, -47.5, 's', 'glass', 5), lot('P-ap', 56, 64, -66, -47.5, 's', 'park'),
+    B('P-b', 27, 55, -32, -14, 'n', 'balcony', 5),
   ],
-  blocks: [[-40,-4,-70,40],[4,90,-36,40],[4,90,-90,-44]], lines: [['p', 0, 0, 0, -40], ['q', 0, -40, 40, -40]],
+  blocks: [[-40,-4,-70,40],[4,90,-36,40],[4,90,-90,-44]], lines: [['p', 0, 0, 0, -40], ['q', 0, -40, 60, -40]],
 };
 // Walking points every 10 m, joined where streets cross.
 export function graph(w) {
@@ -105,9 +116,10 @@ export function facing(w, x, z, yaw, reach = 20) {
   }
   return best;
 }
-// Shortest way from the start to the point outside the right building
-export function bestPath(w, N = graph(w)) {
-  const t = w.buildings.find(b => b.id === w.target), cz = (t.z0 + t.z1) / 2, d = n => Math.hypot(n.x - Math.max(t.x0, Math.min(t.x1, n.x)), n.z - cz);
+// Shortest way from the start to the point outside a building (the right one by default)
+export const bestPath = (w, N = graph(w)) => pathTo(w, w.target, N);
+export function pathTo(w, id, N = graph(w)) {
+  const t = w.buildings.find(b => b.id === id), cz = (t.z0 + t.z1) / 2, d = n => Math.hypot(n.x - Math.max(t.x0, Math.min(t.x1, n.x)), n.z - cz);
   const goal = Object.values(N).reduce((a, n) => d(n) < d(a) ? n : a).id, from = {[w.start.node]: null}, q = [w.start.node];
   for (const c of q) for (const k of N[c].next) if (!(k in from)) { from[k] = c; q.push(k); }
   const p = []; for (let c = goal; c; c = from[c]) p.unshift(c); return p;

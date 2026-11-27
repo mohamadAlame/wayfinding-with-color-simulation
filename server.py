@@ -16,9 +16,20 @@ HOST, PORT = os.environ.get("STUDY_HOST", "127.0.0.1"), int(os.environ.get("STUD
 ROUTES = {"R1": "D-R2", "R2": "E-R2", "R3": "D-R2", "R4": "E-R2"}  # route: its right building
 _T = {"R1": ("tene mafra2 3al yamin", "awal mafra2 3al shmel", "yamin", "a7mar"), "R2": ("awal mafra2 3al shmel", "tene mafra2 3al yamin", "shmel", "asfar"),
       "R3": ("tene mafra2 3al shmel", "awal mafra2 3al yamin", "shmel", "mauve"), "R4": ("awal mafra2 3al yamin", "tene mafra2 3al shmel", "yamin", "akhdar")}
-DEFAULT = {"v": 2, "open": True, "directions": {r: {  # Lebanese Arabizi
+DIRECTIONS1 = {r: {  # Lebanese Arabizi; study 1 (posters only), closed 27 Nov
     "plain": f"Btemsho deghre, btekhdo {a}, w ba3da {b}. Btkoun tene bineye 3al {s}.",
-    "coloured": f"Btemsho deghre, btekhdo {a}, w ba3da {b}. Btkoun l bineye yalli 3layha yafta/poster kbir {c}, 3al {s}."} for r, (a, b, s, c) in _T.items()}}
+    "coloured": f"Btemsho deghre, btekhdo {a}, w ba3da {b}. Btkoun l bineye yalli 3layha yafta/poster kbir {c}, 3al {s}."} for r, (a, b, s, c) in _T.items()}
+# Study 2 (posters and lines on the road). Routes 2 and 4 now say "skip the first, take the second":
+# "awal ..., w ba3da tene ..." was read by some as "first turn, then second turn".
+_T2 = {"R1": "Btemsho deghre, btekhdo tene mafra2 3al yamin, w ba3da awal mafra2 3al shmel.",
+       "R2": "Btemsho deghre, btekhdo awal mafra2 3al shmel. Ba3da btetrko awal mafra2 3al yamin, w btekhdo l tene.",
+       "R3": "Btemsho deghre, btekhdo tene mafra2 3al shmel, w ba3da awal mafra2 3al yamin.",
+       "R4": "Btemsho deghre, btekhdo awal mafra2 3al yamin. Ba3da btetrko awal mafra2 3al shmel, w btekhdo l tene."}
+DIRECTIONS2 = {r: {"plain": f"{_T2[r]} Btkoun tene bineye 3al {s}.",
+                   "coloured": f"{_T2[r]} Btkoun l bineye yalli 3layha yafta/poster kbir {c}, 3al {s}. W fi khatt {c} 3al ard, lhaa2o byousalak la 3enda."}
+               for r, (a, b, s, c) in _T.items()}
+STUDY = 2  # new participants go here; study 1 stays readable
+DEFAULT = {"v": 3, "open": True, "directions": DIRECTIONS1, "directions2": DIRECTIONS2}
 # Who walks what: pairs of routes (1+2, 3+4). Neighbouring cells swap the colour between the same two routes,
 # and the second half repeats the first with the routes in the other order. 8 people fill it once.
 def _cell(x, y, first):
@@ -46,7 +57,11 @@ if not os.path.exists(TOKEN_FILE):
         f.write(secrets.token_urlsafe(18))
 with open(TOKEN_FILE) as f:
     TOKEN = f.read().strip()
-if os.path.exists(CONFIG) and read(CONFIG).get("v") != 2:
+if os.path.exists(CONFIG) and read(CONFIG).get("v") == 2:  # study 1's settings: keep its directions, add study 2's
+    _c = read(CONFIG)
+    os.replace(CONFIG, os.path.join(DATA, "config-study1.json"))
+    write(CONFIG, {"v": 3, "open": _c.get("open", True), "directions": _c["directions"], "directions2": DIRECTIONS2})
+elif os.path.exists(CONFIG) and read(CONFIG).get("v") != 3:
     os.replace(CONFIG, os.path.join(DATA, "config-old.json"))
 if not os.path.exists(CONFIG):
     write(CONFIG, DEFAULT)
@@ -64,11 +79,15 @@ def sessions():
                 print("unreadable", n, file=sys.stderr)
     return out
 
+def study(s):
+    return s.get("study", 1)
+
 def assign():
-    """The cell with the fewest people (finished, or running now); the lowest number on a tie."""
+    """The cell with the fewest people in this study (finished, running now, or opened in the last 10 minutes, so
+    two people opening the link together get different cells); the lowest number on a tie."""
     now, n = time.time(), [0] * len(CELLS)
     for s in sessions():
-        if s.get("cell", -1) >= 0 and not s["preview"] and (s["status"] == "complete" or (s.get("consent") and now - s["t"] < 1800)):
+        if study(s) == STUDY and s.get("cell", -1) >= 0 and not s["preview"] and (s["status"] == "complete" or now - s["t"] < 600 or (s.get("consent") and now - s["t"] < 1800)):
             n[s["cell"]] += 1
     return n.index(min(n))
 
@@ -98,9 +117,9 @@ def clean(b):
         if b.get(k) is True:
             out[k] = True
     if isinstance(b.get("about"), dict):
-        out["about"] = {k: txt(b["about"].get(k), 40) for k in ("sense", "games", "colour_vision")}
+        out["about"] = {k: txt(b["about"].get(k), 40) for k in ("sense", "games", "colour_vision", "before") if k in b["about"]}
     if isinstance(b.get("end"), dict):
-        out["end"] = {k: txt(b["end"].get(k), 600) for k in ("remember", "noticed", "banners")}
+        out["end"] = {k: txt(b["end"].get(k), 600) for k in ("remember", "noticed", "banners", "lines", "lines_notes") if k in b["end"]}
     if b.get("problem"):
         out["problem"] = txt(b["problem"], 200)
     return out
@@ -170,15 +189,16 @@ class H(BaseHTTPRequestHandler):
             self.send(400, {"error": "bad request"})
 
     def reply(self, s):
-        self.send(200, {"code": s["code"], "token": s["token"], "plan": s["plan"]})
+        self.send(200, {"code": s["code"], "token": s["token"], "plan": s["plan"], "study": study(s)})
 
     def start(self, b):
         cfg, pv = read(CONFIG), txt(b.get("preview"), 12)
-        m = re.match(r"^(R[1-4])-(plain|coloured)$", pv)
+        m = re.match(r"^(?:([12])-)?(R[1-4])-(plain|coloured)$", pv)
+        st = int(m.group(1) or STUDY) if m else STUDY
         if not cfg["open"] and not pv:
             return self.send(423, {"error": "closed"})
         s = self.mine(b)
-        if s and "plan" in s and not s.get("directionsShown") and not s["preview"] and not pv:  # reloaded before the directions
+        if s and "plan" in s and study(s) == STUDY and not s.get("directionsShown") and not s["preview"] and not pv:  # reloaded before the directions
             return self.reply(s)
         if len(os.listdir(SESS)) >= MAX_SESSIONS:
             return self.send(503, {"error": "full"})
@@ -186,11 +206,15 @@ class H(BaseHTTPRequestHandler):
         while not code or os.path.exists(spath(code)):
             code = "P-" + "".join(secrets.choice(ABC) for _ in range(5))
         cell = -1 if m else assign()
-        plan = [{"route": m.group(1), "coloured": m.group(2) == "coloured"}] if m else [dict(w) for w in CELLS[cell]]
+        plan = [{"route": m.group(2), "coloured": m.group(3) == "coloured"}] if m else [dict(w) for w in CELLS[cell]]
         for w in plan:
-            w["directions"] = cfg["directions"][w["route"]]["coloured" if w["coloured"] else "plain"]
-        s = {"v": 2, "code": code, "token": secrets.token_urlsafe(16), "cell": cell, "plan": plan, "walks": [], "preview": bool(pv), "status": "started", "t": time.time(),
+            w["directions"] = cfg["directions" if st == 1 else "directions2"][w["route"]]["coloured" if w["coloured"] else "plain"]
+        s = {"v": 3, "study": st, "code": code, "token": secrets.token_urlsafe(16), "cell": cell, "plan": plan, "walks": [], "preview": bool(pv), "status": "started", "t": time.time(),
              "created": datetime.now(timezone.utc).isoformat(timespec="seconds"), "device": txt(b.get("device"), 20), "screen": txt(b.get("screen"), 12)}
+        # Same browser as an earlier study session? It proves it with that session's code and token, kept in the browser.
+        old = self.mine(b.get("before") if isinstance(b.get("before"), dict) else {})
+        if old and study(old) < st:
+            s["before"] = {"code": old["code"], "study": study(old), "finished": old["status"] == "complete"}
         write(spath(code), s)
         self.reply(s)
 
@@ -229,12 +253,13 @@ class H(BaseHTTPRequestHandler):
 
     def manage(self, what, b):
         if what == "state":
-            return self.send(200, {"config": read(CONFIG), "cells": CELLS, "sessions": [{k: v for k, v in s.items() if k != "token"} for s in sessions()]})
+            return self.send(200, {"config": read(CONFIG), "cells": CELLS, "study": STUDY, "sessions": [{k: v for k, v in s.items() if k != "token"} for s in sessions()]})
         if what == "config":
-            d = {r: {k: txt(b["directions"][r][k], 1000).strip() for k in ("plain", "coloured")} for r in ROUTES}
+            d = {r: {k: txt(b["directions2"][r][k], 1000).strip() for k in ("plain", "coloured")} for r in ROUTES}
             if not all(v for x in d.values() for v in x.values()):
                 return self.send(400, {"error": "Every route needs both directions."})
-            write(CONFIG, {"v": 2, "open": b.get("open") is True, "directions": d})
+            cfg = read(CONFIG)
+            write(CONFIG, {**cfg, "v": 3, "open": b.get("open") is True, "directions2": d})
             return self.send(200, {"ok": True})
         code = str(b.get("code", ""))
         if not CODE.match(code) or not os.path.exists(spath(code)):

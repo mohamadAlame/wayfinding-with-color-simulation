@@ -1,7 +1,9 @@
 import {Street} from './scene.js';
-import {ROUTES, PRACTICE, graph, facing} from './world.js';
+import {ROUTES, ROUTES2, PRACTICE, graph, facing} from './world.js';
 const $ = id => document.getElementById(id), q = new URLSearchParams(location.search), preview = q.get('preview');
-const KEY = 'finding-a-building', store = {get: () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } }, set: v => { if (!preview) try { localStorage.setItem(KEY, JSON.stringify(v)); } catch {} }};
+// Study 2 has its own key. Study 1's key, if this browser has one, tells the server this person took part before.
+const KEY = 'finding-a-building-2', KEY1 = 'finding-a-building', got = k => { try { return JSON.parse(localStorage.getItem(k)) || {}; } catch { return {}; } };
+const store = {get: () => got(KEY), set: v => { if (!preview) try { localStorage.setItem(KEY, JSON.stringify(v)); } catch {} }};
 let S, walk = null, at = 0; // at = which of their walks
 const show = id => { document.querySelectorAll('main>section').forEach(s => s.hidden = s.id !== 's-' + id); $('page').hidden = false; $('walk').hidden = true; scrollTo(0, 0); };
 const message = (t, p) => { $('msgT').textContent = t; $('msgP').textContent = p; show('msg'); };
@@ -18,16 +20,20 @@ async function begin() {
   const old = preview ? {} : store.get();
   if (old.stage === 'done') return message('You already took part', 'Thank you! Your code is ' + old.code + '.');
   if (old.stage === 'test') return message('This session has ended', 'The page was reloaded after the directions were shown, so it can’t be continued. Thank you for trying. Your code is ' + old.code + '.');
-  try { S = await api('start', {preview: preview || '', code: old.code || '', token: old.token || '', device: matchMedia('(pointer:coarse)').matches ? 'phone/tablet' : 'computer', screen: innerWidth + 'x' + innerHeight}); }
+  const o1 = preview ? {} : got(KEY1);
+  try { S = await api('start', {preview: preview || '', code: old.code || '', token: old.token || '', before: {code: o1.code || '', token: o1.token || ''}, device: matchMedia('(pointer:coarse)').matches ? 'phone/tablet' : 'computer', screen: innerWidth + 'x' + innerHeight}); }
   catch (e) { return e.status === 423 ? message('The study is closed', 'Thank you for your interest.') : message('Something went wrong', 'Please check your connection and reload the page.'); }
-  store.set({code: S.code, token: S.token, stage: 'start'}); S.walks = [];
+  store.set({code: S.code, token: S.token, stage: 'start'}); S.walks = []; S.world = S.study === 1 ? ROUTES : ROUTES2;
+  document.body.dataset.study = S.study; if (S.study !== 2) document.querySelectorAll('.s2 input').forEach(i => i.required = false);
   document.querySelectorAll('[data-code]').forEach(e => e.textContent = S.code); show('welcome');
 }
 $('c1').onchange = () => $('agree').disabled = !$('c1').checked;
 $('agree').onclick = () => { saveQuiet({consent: true}); show('about'); };
 $('aboutForm').onsubmit = e => { e.preventDefault(); saveQuiet({about: answers(e.target)}); show('practice'); };
-$('goPractice').onclick = $('again').onclick = () => startWalk('practice');
-function ready() { $('readyT').textContent = at ? 'Second walk' : 'Good, you’ve got it'; $('readyP').textContent = at ? 'A different neighbourhood, with new directions. Again you read them once.' : 'Now the first real walk. You’ll read the directions once, then they disappear. Take your time, and don’t write them down.'; $('again').hidden = at > 0; show('ready'); }
+$('practiceSay').textContent = PRACTICE.directions;
+$('goPractice').onclick = () => { $('practiceSay').hidden = true; startWalk('practice'); };
+$('again').onclick = () => { $('practiceSay').hidden = false; show('practice'); };
+function ready() { $('readyT').textContent = at ? 'Second walk' : 'Good, you’ve got it'; $('readyP').textContent = at ? 'A different neighbourhood, with new directions. Again you read them once.' : 'Now the first real walk. Same as the practice: you read the directions once, then they disappear. This time there are no hints and you choose only once. Take your time, and don’t write them down.'; $('again').hidden = at > 0; show('ready'); }
 $('goDirections').onclick = () => { $('say').textContent = S.plan[at].directions; store.set({code: S.code, token: S.token, stage: 'test'}); saveQuiet({directionsShown: true}); S.readFrom = performance.now(); show('directions'); };
 $('goTest').onclick = () => { S.readMs = Math.round(performance.now() - S.readFrom); $('say').textContent = ''; startWalk('test'); };
 $('afterForm').onsubmit = e => {
@@ -47,13 +53,13 @@ function startWalk(kind) {
   $('page').hidden = true; $('walk').hidden = false; $('loading').hidden = false; $('loading').textContent = 'Loading the street…'; $('ask').hidden = true; $('tip').hidden = true;
   setTimeout(() => {
     try {
-      const w = kind === 'test' ? ROUTES[S.plan[at].route] : PRACTICE, nodes = graph(w), n = nodes[w.start.node];
+      const w = kind === 'test' ? S.world[S.plan[at].route] : PRACTICE, nodes = graph(w), n = nodes[w.start.node];
       // a fresh canvas each time: a disposed WebGL canvas can't be reused reliably
       const cv = document.createElement('canvas'); cv.id = 'cv'; $('cv').replaceWith(cv); bindCanvas(cv);
       const street = new Street(cv, w, kind === 'test' && S.plan[at].coloured);
       walk = {kind, w, nodes, node: n, x: n.x, z: n.z, yaw: w.start.yaw, pitch: .06, street, path: [], rec: [], events: [], moving: false, held: false, turn: 0, hidden: 0, t0: performance.now(), last: 0, dirty: true};
       street.resize(); street.setArrows(n, nodes); street.render(walk.x, walk.z, walk.yaw, walk.pitch); mark();
-      requestAnimationFrame(() => { $('loading').hidden = true; walk.t0 = performance.now(); sample(); if (kind === 'practice') tip(matchMedia('(pointer:coarse)').matches ? 'Drag to look around. Hold “Walk” to go forward.' : 'Drag, or A and D, to look around. Hold W or “Walk” to go forward.'); requestAnimationFrame(loop); });
+      requestAnimationFrame(() => { $('loading').hidden = true; walk.t0 = performance.now(); sample(); if (kind === 'practice') tip(matchMedia('(pointer:coarse)').matches ? 'Drag to look around. Hold “Walk” to go forward.' : 'Drag, or A and D, to look around. Hold W or “Walk” to go forward.', 6000); requestAnimationFrame(loop); });
     } catch (e) { console.error(e); $('loading').textContent = 'This device could not show the 3D street. Please try another browser or a computer.'; saveQuiet({problem: String(e).slice(0, 200)}); }
   }, 60);
 }
@@ -69,10 +75,10 @@ function sample() {
 }
 const event = (e, id = '') => { if (walk.kind === 'test' && walk.events.length < 200) walk.events.push([now(), e, id]); };
 const result = (w, chosen) => ({ms: Math.round(performance.now() - w.t0), hiddenMs: Math.round(w.hidden), readMs: S.readMs, chosen, path: w.path.slice(0, 1500), rec: w.rec, events: w.events});
-let tipT; function tip(t, ms) { clearTimeout(tipT); $('tip').textContent = t; $('tip').hidden = !t; if (ms) tipT = setTimeout(() => $('tip').hidden = true, ms); }
+let tipT, tipKeep = false; function tip(t, ms, keep = false) { clearTimeout(tipT); tipKeep = keep && !!t; $('tip').textContent = t; $('tip').hidden = !t; if (ms) tipT = setTimeout(() => $('tip').hidden = true, ms); }
 const diff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 function ahead() { let best = null, bd = .9; for (const id of walk.node.next) { const n = walk.nodes[id], d = Math.abs(diff(Math.atan2(n.x - walk.node.x, -(n.z - walk.node.z)), walk.yaw)); if (d < bd) { bd = d; best = id; } } return best; }
-function go(id) { if (!walk || walk.moving || !id || !$('ask').hidden) return; walk.moving = true; walk.from = walk.node; walk.to = walk.nodes[id]; walk.k = 0; walk.street.arrows.visible = false; if (walk.kind === 'practice') tip(''); }
+function go(id) { if (!walk || walk.moving || !id || !$('ask').hidden) return; walk.moving = true; walk.from = walk.node; walk.to = walk.nodes[id]; walk.k = 0; walk.street.arrows.visible = false; if (walk.kind === 'practice' && !tipKeep) tip(''); }
 function back() { const y = walk.yaw; walk.yaw = y + Math.PI; const id = ahead(); walk.yaw = y; if (id) go(id); else tip('You can’t step back here.', 1800); }
 function forward() { const id = ahead(); if (id) go(id); else tip('You can’t walk that way. Turn towards a street.', 2200); }
 function loop(t) {
@@ -80,7 +86,7 @@ function loop(t) {
   if (walk.turn && $('ask').hidden) { walk.yaw += walk.turn * dt * .0016; walk.dirty = true; }
   if (walk.moving) {
     walk.k = Math.min(1, walk.k + dt / 620); walk.x = walk.from.x + (walk.to.x - walk.from.x) * walk.k; walk.z = walk.from.z + (walk.to.z - walk.from.z) * walk.k; walk.dirty = true;
-    if (walk.k === 1) { walk.moving = false; walk.node = walk.to; mark(); let id = null; if (walk.held) { const y = walk.yaw; if (walk.held < 0) walk.yaw += Math.PI; id = ahead(); walk.yaw = y; } if (id) go(id); else { walk.street.setArrows(walk.node, walk.nodes); walk.street.arrows.visible = true; } if (walk.kind === 'practice' && walk.node.id === 'p4') tip(matchMedia('(pointer:coarse)').matches ? 'Now turn right: hold ▶ or drag the picture. Then walk on.' : 'Now turn right: hold D or ▶, or drag the picture. Then walk on.'); if (walk.kind === 'practice' && walk.node.id === 'q4') tip('Put the white dot on the building ahead and press “This is the building”.'); }
+    if (walk.k === 1) { walk.moving = false; walk.node = walk.to; mark(); let id = null; if (walk.held) { const y = walk.yaw; if (walk.held < 0) walk.yaw += Math.PI; id = ahead(); walk.yaw = y; } if (id) go(id); else { walk.street.setArrows(walk.node, walk.nodes); walk.street.arrows.visible = true; } if (walk.kind === 'practice' && walk.node.id === 'p4') tip(matchMedia('(pointer:coarse)').matches ? 'This is the first side street. To turn: hold ▶ or ◀, or drag the picture.' : 'This is the first side street. To turn: hold D or A (▶ ◀), or drag the picture.'); if (walk.kind === 'practice' && walk.node.id === 'q1') tip('Count the buildings on each side. To choose one, stand in front of it, put the white dot on it and press “This is the building”.', 8000, true); }
   }
   if (walk.dirty) { walk.street.render(walk.x, walk.z, walk.yaw, walk.pitch); walk.dirty = false; }
   sample(); requestAnimationFrame(loop);
@@ -120,7 +126,10 @@ $('here').onclick = () => {
 $('no').onclick = () => { $('ask').hidden = true; event('kept walking'); };
 $('yes').onclick = () => {
   if (!walk?.choice) return; const w = walk, id = w.choice.id; $('ask').hidden = true;
-  if (w.kind === 'practice') { if (id !== w.w.target) return tip('Not that one. Turn right at the corner, go to the end, and choose the building straight ahead.', 4500); end(); saveQuiet({practiceDone: true}); return ready(); }
+  if (w.kind === 'practice') {
+    if (id !== w.w.target) { w.misses = (w.misses || 0) + 1; return tip({'P-a1': 'Not that one: that is the first building on the left. The directions said the second.', 'P-b': 'Not that one: that building is on the right. The directions said the left.', 'P-R1': 'Not that one: that building is on the right. The directions said the left.', 'P-N': 'Not that one. The directions said to take the first side street on the right.'}[id] || 'Not that one. The directions were: “' + PRACTICE.directions + '”', 6000); }
+    end(); saveQuiet({practiceDone: true}); return ready();
+  }
   mark(); event('chose', id); S.walks[at] = result(w, id);
   end(); saveQuiet({walk: at, data: S.walks[at]}); $('afterT').textContent = at + 1 < S.plan.length ? 'First walk done' : 'Second walk done'; show('after');
 };
