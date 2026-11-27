@@ -192,7 +192,7 @@ class H(BaseHTTPRequestHandler):
         self.send(200, {"code": s["code"], "token": s["token"], "plan": s["plan"], "study": study(s)})
 
     def start(self, b):
-        cfg, pv = read(CONFIG), txt(b.get("preview"), 12)
+        cfg, pv = read(CONFIG), txt(b.get("preview"), 16)
         m = re.match(r"^(?:([12])-)?(R[1-4])-(plain|coloured)$", pv)
         st = int(m.group(1) or STUDY) if m else STUDY
         if not cfg["open"] and not pv:
