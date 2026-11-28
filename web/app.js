@@ -33,18 +33,21 @@ $('agree').onclick = () => { saveQuiet({consent: true}); show('practice'); };
 $('practiceSay').textContent = PRACTICE.directions;
 $('goPractice').onclick = () => { $('practiceSay').hidden = true; startWalk('practice'); };
 $('again').onclick = () => { $('practiceSay').hidden = false; show('practice'); };
-function ready() { $('readyT').textContent = at ? 'Second walk' : 'Good, you’ve got it'; $('readyP').textContent = at ? 'A different neighbourhood, with new directions. Again you read them once.' : 'Now the first real walk. Same as the practice: you read the directions once, then they disappear. This time there are no hints and you choose only once. Take your time, and don’t write them down.'; $('again').hidden = at > 0; show('ready'); }
-$('goDirections').onclick = () => { $('say').textContent = S.plan[at].directions; store.set({code: S.code, token: S.token, stage: 'test'}); saveQuiet({directionsShown: true}); S.readFrom = performance.now(); show('directions'); };
+// Only after the practice; between the two walks the "Continue" button goes straight to the next directions.
+function ready() { $('readyT').textContent = 'Good, you’ve got it'; $('readyP').textContent = 'Now the two real walks. Treat the directions as if a guard just told you. Then find the building. You choose only once.'; show('ready'); }
+const directions = () => { $('say').textContent = S.plan[at].directions; store.set({code: S.code, token: S.token, stage: 'test'}); saveQuiet({directionsShown: true}); S.readFrom = performance.now(); show('directions'); };
+$('goDirections').onclick = directions;
 $('goTest').onclick = () => { S.readMs = Math.round(performance.now() - S.readFrom); $('say').textContent = ''; startWalk('test'); };
 $('afterForm').onsubmit = e => {
   e.preventDefault(); S.walks[at].after = answers(e.target); e.target.reset(); saveQuiet({walk: at, data: S.walks[at]});
-  if (++at < S.plan.length) ready(); else show('end');
+  if (++at < S.plan.length) directions(); else show('end');
 };
-$('endForm').onsubmit = e => { e.preventDefault(); S.end = answers(e.target); saveQuiet({end: S.end}); show('end2'); };
-$('end2Form').onsubmit = e => { e.preventDefault(); S.end = {...S.end, ...answers(e.target)}; saveQuiet({end: S.end}); show('about'); };
-$('aboutForm').onsubmit = async e => {
+// One last page: the open questions and the about-you questions together.
+const END = ['lines', 'wrote', 'easier', 'comments'];
+$('endForm').onsubmit = async e => {
   e.preventDefault(); const b = e.submitter || e.target.querySelector('button'); b.disabled = true; $('saveErr').textContent = '';
-  try { await save({about: answers(e.target), end: S.end, walks: S.walks, complete: true}); store.set({code: S.code, token: S.token, stage: 'done'}); show('thanks'); }
+  const a = answers(e.target), end = Object.fromEntries(END.filter(k => k in a).map(k => [k, a[k]])), about = Object.fromEntries(Object.entries(a).filter(([k]) => !END.includes(k)));
+  try { await save({about, end, walks: S.walks, complete: true}); store.set({code: S.code, token: S.token, stage: 'done'}); show('thanks'); }
   catch { $('saveErr').textContent = 'Not saved. Check your connection and press Finish again.'; b.disabled = false; }
 };
 $('erase').onclick = async () => { if (!confirm('Delete all your answers? This can’t be undone.')) return; try { await api('erase', {code: S.code, token: S.token}); message('Deleted', 'Your answers were deleted. Thank you anyway.'); } catch { alert('Could not delete. Please try again.'); } };
@@ -132,7 +135,7 @@ $('yes').onclick = () => {
     end(); saveQuiet({practiceDone: true}); return ready();
   }
   mark(); event('chose', id); S.walks[at] = result(w, id);
-  end(); saveQuiet({walk: at, data: S.walks[at]}); $('afterT').textContent = at + 1 < S.plan.length ? 'First walk done' : 'Second walk done'; show('after');
+  end(); saveQuiet({walk: at, data: S.walks[at]}); $('afterT').textContent = at + 1 < S.plan.length ? 'First walk done' : 'Both walks done'; $('afterGo').textContent = at + 1 < S.plan.length ? 'Continue to the second walk' : 'Continue'; show('after');
 };
 function end() { walk.street.dispose(); walk = null; }
 begin();

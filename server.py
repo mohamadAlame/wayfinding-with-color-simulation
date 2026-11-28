@@ -32,6 +32,7 @@ DIRECTIONS2 = {r: {"plain": f"{_T2[r]} Btkoun tene bineye 3al {s}.",
                    "coloured": f"Lhaa2o l khatt l {c} yalli 3al ard. Byousalkon 3al bineye yalli 3layha yafta/poster kbir {c}."}
                for r, (a, b, s, c) in _T.items()}
 STUDY = 2  # new participants go here; study 1 stays readable
+FORM = 2  # 2 (28 Nov): shorter survey, one last page. Missing = the longer form before it.
 DEFAULT = {"v": 3, "open": True, "directions": DIRECTIONS1, "directions2": DIRECTIONS2}
 # Who walks what: pairs of routes (1+2, 3+4). Neighbouring cells swap the colour between the same two routes,
 # and the second half repeats the first with the routes in the other order. 8 people fill it once.
@@ -122,7 +123,7 @@ def clean(b):
     if isinstance(b.get("about"), dict):
         out["about"] = {k: txt(b["about"].get(k), 40) for k in ("sense", "games", "colour_vision", "before", "age", "gender", "aubmc") if k in b["about"]}
     if isinstance(b.get("end"), dict):
-        out["end"] = {k: txt(b["end"].get(k), 600) for k in ("remember", "noticed", "banners", "lines", "lines_notes") if k in b["end"]}
+        out["end"] = {k: txt(b["end"].get(k), 600) for k in ("remember", "noticed", "banners", "lines", "lines_notes", "wrote", "easier", "comments") if k in b["end"]}
     if b.get("problem"):
         out["problem"] = txt(b["problem"], 200)
     return out
@@ -212,7 +213,7 @@ class H(BaseHTTPRequestHandler):
         plan = [{"route": m.group(2), "coloured": m.group(3) == "coloured"}] if m else [dict(w) for w in CELLS[cell]]
         for w in plan:
             w["directions"] = cfg["directions" if st == 1 else "directions2"][w["route"]]["coloured" if w["coloured"] else "plain"]
-        s = {"v": 3, "study": st, "code": code, "token": secrets.token_urlsafe(16), "cell": cell, "plan": plan, "walks": [], "preview": bool(pv), "status": "started", "t": time.time(),
+        s = {"v": 3, "study": st, "code": code, "token": secrets.token_urlsafe(16), "cell": cell, "plan": plan, "walks": [], "form": FORM, "preview": bool(pv), "status": "started", "t": time.time(),
              "created": datetime.now(timezone.utc).isoformat(timespec="seconds"), "device": txt(b.get("device"), 20), "screen": txt(b.get("screen"), 12)}
         # Same browser as an earlier study session? It proves it with that session's code and token, kept in the browser.
         old = self.mine(b.get("before") if isinstance(b.get("before"), dict) else {})
